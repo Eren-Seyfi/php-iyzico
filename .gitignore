@@ -1,0 +1,11 @@
+# Created by https://gitignore.org
+# Composer.gitignore
+
+composer.phar
+/vendor/
+test.md
+checkout-init.php
+.env
+
+# Library projede lock dosyasını ignore et
+composer.lock
