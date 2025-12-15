@@ -2,7 +2,6 @@
   "name": "eren-seyfi/php-iyzico",
   "description": "Unofficial, opinionated PHP helper library built on top of iyzico/iyzipay-php.",
   "type": "library",
-  "version": "1.0.0",
   "license": "MIT",
   "keywords": [
     "iyzico",
