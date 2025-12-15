@@ -9,48 +9,54 @@ use Iyzipay\Model\BasketItem;
 
 final class Helpers
 {
-    /** @param array<string,mixed> $a */
-    public static function buyer(array $a): Buyer
+    /** @param array<string,mixed> $buyerData */
+    public static function buyer(array $buyerData): Buyer
     {
-        $b = new Buyer();
-        isset($a['id']) && $b->setId($a['id']);
-        isset($a['name']) && $b->setName($a['name']);
-        isset($a['surname']) && $b->setSurname($a['surname']);
-        isset($a['gsmNumber']) && $b->setGsmNumber($a['gsmNumber']);
-        isset($a['email']) && $b->setEmail($a['email']);
-        isset($a['identityNumber']) && $b->setIdentityNumber($a['identityNumber']);
-        isset($a['lastLoginDate']) && $b->setLastLoginDate($a['lastLoginDate']);
-        isset($a['registrationDate']) && $b->setRegistrationDate($a['registrationDate']);
-        isset($a['registrationAddress']) && $b->setRegistrationAddress($a['registrationAddress']);
-        isset($a['ip']) && $b->setIp($a['ip']);
-        isset($a['city']) && $b->setCity($a['city']);
-        isset($a['country']) && $b->setCountry($a['country']);
-        isset($a['zipCode']) && $b->setZipCode($a['zipCode']);
-        return $b;
+        $buyerModel = new Buyer();
+
+        isset($buyerData['id']) && $buyerModel->setId($buyerData['id']);
+        isset($buyerData['name']) && $buyerModel->setName($buyerData['name']);
+        isset($buyerData['surname']) && $buyerModel->setSurname($buyerData['surname']);
+        isset($buyerData['gsmNumber']) && $buyerModel->setGsmNumber($buyerData['gsmNumber']);
+        isset($buyerData['email']) && $buyerModel->setEmail($buyerData['email']);
+        isset($buyerData['identityNumber']) && $buyerModel->setIdentityNumber($buyerData['identityNumber']);
+        isset($buyerData['lastLoginDate']) && $buyerModel->setLastLoginDate($buyerData['lastLoginDate']);
+        isset($buyerData['registrationDate']) && $buyerModel->setRegistrationDate($buyerData['registrationDate']);
+        isset($buyerData['registrationAddress']) && $buyerModel->setRegistrationAddress($buyerData['registrationAddress']);
+        isset($buyerData['ip']) && $buyerModel->setIp($buyerData['ip']);
+        isset($buyerData['city']) && $buyerModel->setCity($buyerData['city']);
+        isset($buyerData['country']) && $buyerModel->setCountry($buyerData['country']);
+        isset($buyerData['zipCode']) && $buyerModel->setZipCode($buyerData['zipCode']);
+
+        return $buyerModel;
     }
 
-    /** @param array<string,mixed> $a */
-    public static function address(array $a): Address
+    /** @param array<string,mixed> $addressData */
+    public static function address(array $addressData): Address
     {
-        $addr = new Address();
-        isset($a['contactName']) && $addr->setContactName($a['contactName']);
-        isset($a['city']) && $addr->setCity($a['city']);
-        isset($a['country']) && $addr->setCountry($a['country']);
-        isset($a['address']) && $addr->setAddress($a['address']);
-        isset($a['zipCode']) && $addr->setZipCode($a['zipCode']);
-        return $addr;
+        $addressModel = new Address();
+
+        isset($addressData['contactName']) && $addressModel->setContactName($addressData['contactName']);
+        isset($addressData['city']) && $addressModel->setCity($addressData['city']);
+        isset($addressData['country']) && $addressModel->setCountry($addressData['country']);
+        isset($addressData['address']) && $addressModel->setAddress($addressData['address']);
+        isset($addressData['zipCode']) && $addressModel->setZipCode($addressData['zipCode']);
+
+        return $addressModel;
     }
 
-    /** @param array<string,mixed> $a */
-    public static function basketItem(array $a): BasketItem
+    /** @param array<string,mixed> $basketItemData */
+    public static function basketItem(array $basketItemData): BasketItem
     {
-        $bi = new BasketItem();
-        isset($a['id']) && $bi->setId($a['id']);
-        isset($a['name']) && $bi->setName($a['name']);
-        isset($a['category1']) && $bi->setCategory1($a['category1']);
-        isset($a['category2']) && $bi->setCategory2($a['category2']);
-        isset($a['itemType']) && $bi->setItemType($a['itemType']);
-        isset($a['price']) && $bi->setPrice((string) $a['price']);
-        return $bi;
+        $basketItemModel = new BasketItem();
+
+        isset($basketItemData['id']) && $basketItemModel->setId($basketItemData['id']);
+        isset($basketItemData['name']) && $basketItemModel->setName($basketItemData['name']);
+        isset($basketItemData['category1']) && $basketItemModel->setCategory1($basketItemData['category1']);
+        isset($basketItemData['category2']) && $basketItemModel->setCategory2($basketItemData['category2']);
+        isset($basketItemData['itemType']) && $basketItemModel->setItemType($basketItemData['itemType']);
+        isset($basketItemData['price']) && $basketItemModel->setPrice((string) $basketItemData['price']);
+
+        return $basketItemModel;
     }
 }

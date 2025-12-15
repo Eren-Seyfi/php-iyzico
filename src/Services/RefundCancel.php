@@ -16,118 +16,108 @@ use InvalidArgumentException;
 
 final class RefundCancel
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
      * Tam iptal (Cancel). Partial desteklemez.
      *
-     * @param  string      $paymentId  İptal edilecek ödeme ID’si
-     * @param  string|null $ip         Örn: "85.34.78.112"
+     * @param string      $paymentId  İptal edilecek ödeme ID’si
+     * @param string|null $ipAddress  Müşterinin IP adresi ("85.34.78.112" gibi)
      */
     public function cancel(
         string $paymentId,
-        ?string $ip = null
+        ?string $ipAddress = null
     ): Cancel {
         $paymentId = $this->requireNonEmpty($paymentId, 'paymentId');
 
-        $r = new CreateCancelRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPaymentId($paymentId);
+        $cancelRequest = new CreateCancelRequest();
+        $cancelRequest->setLocale($this->config->locale);
+        $cancelRequest->setConversationId($this->config->conversationId);
+        $cancelRequest->setPaymentId($paymentId);
 
-        if ($ip !== null && $ip !== '') {
-            $r->setIp($ip);
+        if ($ipAddress !== null && $ipAddress !== '') {
+            $cancelRequest->setIp($ipAddress);
         }
 
-        return Cancel::create($r, OptionsFactory::create($this->cfg));
+        return Cancel::create($cancelRequest, OptionsFactory::create($this->config));
     }
 
     /**
      * Kısmi/Tam iade (transaction bazlı).
      * CreateRefundRequest reason/description alanlarını destekler.
-     *
-     * @param string              $paymentTransactionId
-     * @param string|int|float    $price
-     * @param string              $currency
-     * @param string|null         $ip
-     * @param string|null         $reason        \Iyzipay\Model\RefundReason::*
-     * @param string|null         $description
      */
     public function refund(
         string $paymentTransactionId,
         string|int|float $price,
         string $currency = Currency::TL,
-        ?string $ip = null,
-        ?string $reason = null,
-        ?string $description = null
+        ?string $ipAddress = null,
+        ?string $refundReason = null,
+        ?string $refundDescription = null
     ): Refund {
         $paymentTransactionId = $this->requireNonEmpty($paymentTransactionId, 'paymentTransactionId');
         $normalizedPrice = $this->normalizePrice($price);
-        $currency = $this->normalizeCurrency($currency);
+        $normalizedCurrency = $this->normalizeCurrency($currency);
 
-        $r = new CreateRefundRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPaymentTransactionId($paymentTransactionId);
-        $r->setPrice($normalizedPrice);
-        $r->setCurrency($currency);
+        $refundRequest = new CreateRefundRequest();
+        $refundRequest->setLocale($this->config->locale);
+        $refundRequest->setConversationId($this->config->conversationId);
+        $refundRequest->setPaymentTransactionId($paymentTransactionId);
+        $refundRequest->setPrice($normalizedPrice);
+        $refundRequest->setCurrency($normalizedCurrency);
 
-        if ($ip !== null && $ip !== '') {
-            $r->setIp($ip);
+        if ($ipAddress !== null && $ipAddress !== '') {
+            $refundRequest->setIp($ipAddress);
         }
-        if ($reason !== null && $reason !== '') {
-            $r->setReason($reason);
+        if ($refundReason !== null && $refundReason !== '') {
+            $refundRequest->setReason($refundReason);
         }
-        if ($description !== null && $description !== '') {
-            $r->setDescription($description);
+        if ($refundDescription !== null && $refundDescription !== '') {
+            $refundRequest->setDescription($refundDescription);
         }
 
-        return Refund::create($r, OptionsFactory::create($this->cfg));
+        return Refund::create($refundRequest, OptionsFactory::create($this->config));
     }
 
     /**
      * Refund V2 – PaymentId + Amount (AmountBaseRefundRequest).
      * NOT: reason/description bu request'te yok.
-     *
-     * @param string            $paymentId
-     * @param string|int|float  $price
-     * @param string|null       $ip
      */
     public function amountBaseRefund(
         string $paymentId,
         string|int|float $price,
-        ?string $ip = null
+        ?string $ipAddress = null
     ): AmountBaseRefund {
         $paymentId = $this->requireNonEmpty($paymentId, 'paymentId');
         $normalizedPrice = $this->normalizePrice($price);
 
-        $r = new AmountBaseRefundRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPaymentId($paymentId);
-        // SDK bu alanda numerik bekliyor; normalize edilmiş string'i float'a çeviriyoruz.
-        $r->setPrice((float) $normalizedPrice);
+        $amountBaseRefundRequest = new AmountBaseRefundRequest();
+        $amountBaseRefundRequest->setLocale($this->config->locale);
+        $amountBaseRefundRequest->setConversationId($this->config->conversationId);
+        $amountBaseRefundRequest->setPaymentId($paymentId);
+        $amountBaseRefundRequest->setPrice((float) $normalizedPrice);
 
-        if ($ip !== null && $ip !== '') {
-            $r->setIp($ip);
+        if ($ipAddress !== null && $ipAddress !== '') {
+            $amountBaseRefundRequest->setIp($ipAddress);
         }
 
-        return AmountBaseRefund::create($r, OptionsFactory::create($this->cfg));
+        return AmountBaseRefund::create($amountBaseRefundRequest, OptionsFactory::create($this->config));
     }
 
     // -------------------
     // Helpers
     // -------------------
 
-    private function requireNonEmpty(?string $val, string $field): string
+    private function requireNonEmpty(?string $value, string $fieldName): string
     {
-        $val = trim((string) $val);
-        if ($val === '') {
-            throw new InvalidArgumentException("$field boş olamaz.");
+        $trimmedValue = trim((string) $value);
+
+        if ($trimmedValue === '') {
+            throw new InvalidArgumentException("$fieldName boş olamaz.");
         }
-        return $val;
+
+        return $trimmedValue;
     }
 
     private function normalizePrice(string|int|float $price): string
@@ -135,20 +125,32 @@ final class RefundCancel
         if (is_string($price)) {
             $price = str_replace(',', '.', trim($price));
         }
-        $num = (float) $price;
-        if ($num <= 0) {
+
+        $numericPrice = (float) $price;
+
+        if ($numericPrice <= 0) {
             throw new InvalidArgumentException('Tutar 0’dan büyük olmalıdır.');
         }
-        return number_format($num, 2, '.', '');
+
+        return number_format($numericPrice, 2, '.', '');
     }
 
     private function normalizeCurrency(string $currency): string
     {
-        $currency = strtoupper(trim($currency));
-        $allowed = [Currency::TL, Currency::EUR, Currency::USD, Currency::GBP, Currency::IRR];
-        if (!in_array($currency, $allowed, true)) {
-            throw new InvalidArgumentException('Geçersiz para birimi: ' . $currency);
+        $normalizedCurrency = strtoupper(trim($currency));
+
+        $allowedCurrencies = [
+            Currency::TL,
+            Currency::EUR,
+            Currency::USD,
+            Currency::GBP,
+            Currency::IRR
+        ];
+
+        if (!in_array($normalizedCurrency, $allowedCurrencies, true)) {
+            throw new InvalidArgumentException('Geçersiz para birimi: ' . $normalizedCurrency);
         }
-        return $currency;
+
+        return $normalizedCurrency;
     }
 }

@@ -10,23 +10,28 @@ use Iyzipay\Model\Subscription\SubscriptionCardUpdate;
 use Iyzipay\Request\Subscription\SubscriptionCardUpdateRequest;
 
 /**
- * Müşteri kartı güncelleme formu (checkout content döner)
+ * Müşteri kartı güncelleme (card update checkout formu başlatma)
  */
 final class CardUpdateService
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
-    /** Müşteri referansı ile kart güncelleme formu başlatır */
-    public function byCustomer(string $customerRef, string $callbackUrl)
+    /**
+     * Müşteri referans kodu ile kart güncelleme formu başlatır
+     */
+    public function byCustomer(string $customerReferenceCode, string $callbackUrl)
     {
-        $r = new SubscriptionCardUpdateRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setCustomerReferenceCode($customerRef);
-        $r->setCallbackUrl($callbackUrl);
+        $cardUpdateRequest = new SubscriptionCardUpdateRequest();
+        $cardUpdateRequest->setLocale($this->config->locale);
+        $cardUpdateRequest->setConversationId($this->config->conversationId);
+        $cardUpdateRequest->setCustomerReferenceCode($customerReferenceCode);
+        $cardUpdateRequest->setCallbackUrl($callbackUrl);
 
-        return SubscriptionCardUpdate::create($r, OptionsFactory::create($this->cfg));
+        return SubscriptionCardUpdate::create(
+            $cardUpdateRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 }

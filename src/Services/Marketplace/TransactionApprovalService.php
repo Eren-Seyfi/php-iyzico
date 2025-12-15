@@ -5,29 +5,27 @@ namespace Eren5\PhpIyzico\Services\Marketplace;
 
 use Eren5\PhpIyzico\Config;
 use Eren5\PhpIyzico\OptionsFactory;
-use InvalidArgumentException;
 
-// Iyzipay
+use InvalidArgumentException;
 use Iyzipay\Options;
-use Iyzipay\Model\Locale;                       // "tr" | "en"
-use Iyzipay\Request\CreateApprovalRequest;      // Ortak istek sınıfı
-use Iyzipay\Model\Approval;                     // Onay verme endpoint'i
-use Iyzipay\Model\Disapproval;                  // Onay kaldırma endpoint'i
+use Iyzipay\Model\Locale;
+use Iyzipay\Model\Approval;
+use Iyzipay\Model\Disapproval;
+use Iyzipay\Request\CreateApprovalRequest;
 
 /**
  * TransactionApprovalService
  *
- * Pazaryeri ödemelerinde sepet kalemi (payment item) bazında:
- * - Onay Verme (Approval::create)
- * - Onay Kaldırma (Disapproval::create)
+ * Pazaryeri ödemelerinde, her bir sepet kalemi için:
+ *  - Onay Verme
+ *  - Onay Kaldırma
  *
  * NOT:
- * - Buradaki kimlik "paymentTransactionId"dir (ödemenin her basket item’ına aittir),
- *   "paymentId" değildir.
+ *   İşlem kimliği "paymentTransactionId"dir.
+ *   Bu ID, Payment içerisindeki her basket item için farklıdır.
  */
 final class TransactionApprovalService
 {
-    /** @var Options Iyzipay Options (apiKey/secret/baseUrl vs.) */
     private Options $options;
 
     public function __construct(private Config $config)
@@ -36,13 +34,13 @@ final class TransactionApprovalService
     }
 
     /**
-     * Onay Verme (Approval)
+     * Sepet kalemi için ONAY VERİR (Approval)
      *
      * @param array{
-     *   paymentTransactionId: string|int,   // Zorunlu: Onaylanacak işlem kalemi
-     *   locale?: string,                    // Opsiyonel: Locale::TR | Locale::EN
-     *   conversationId?: string             // Opsiyonel: İzleme amaçlı
-     * } $data
+     *   paymentTransactionId: string|int,
+     *   locale?: string,
+     *   conversationId?: string
+     * } $requestData
      *
      * @return array{
      *   ok: bool,
@@ -52,28 +50,28 @@ final class TransactionApprovalService
      *   raw: array<string,mixed>|string|null
      * }
      */
-    public function approve(array $data): array
+    public function approve(array $requestData): array
     {
-        $this->require($data, ['paymentTransactionId']);
+        $this->requireFields($requestData, ['paymentTransactionId']);
 
-        $req = new CreateApprovalRequest();
-        $req->setLocale($data['locale'] ?? Locale::TR);
-        $req->setConversationId($data['conversationId'] ?? (string) microtime(true));
-        $req->setPaymentTransactionId((string) $data['paymentTransactionId']);
+        $request = new CreateApprovalRequest();
+        $request->setLocale($requestData['locale'] ?? Locale::TR);
+        $request->setConversationId($requestData['conversationId'] ?? (string) microtime(true));
+        $request->setPaymentTransactionId((string) $requestData['paymentTransactionId']);
 
-        $resp = Approval::create($req, $this->options);
+        $response = Approval::create($request, $this->options);
 
-        return $this->responseToArray($resp);
+        return $this->normalizeResponse($response);
     }
 
     /**
-     * Onay Kaldırma (Disapproval)
+     * Sepet kalemi için ONAY KALDIRIR (Disapproval)
      *
      * @param array{
-     *   paymentTransactionId: string|int,   // Zorunlu: Onayı kaldırılacak işlem kalemi
-     *   locale?: string,                    // Opsiyonel
-     *   conversationId?: string             // Opsiyonel
-     * } $data
+     *   paymentTransactionId: string|int,
+     *   locale?: string,
+     *   conversationId?: string
+     * } $requestData
      *
      * @return array{
      *   ok: bool,
@@ -83,65 +81,62 @@ final class TransactionApprovalService
      *   raw: array<string,mixed>|string|null
      * }
      */
-    public function disapprove(array $data): array
+    public function disapprove(array $requestData): array
     {
-        $this->require($data, ['paymentTransactionId']);
+        $this->requireFields($requestData, ['paymentTransactionId']);
 
-        $req = new CreateApprovalRequest(); // Aynı request sınıfı kullanılır
-        $req->setLocale($data['locale'] ?? Locale::TR);
-        $req->setConversationId($data['conversationId'] ?? (string) microtime(true));
-        $req->setPaymentTransactionId((string) $data['paymentTransactionId']);
+        // Disapproval da aynı request sınıfını kullanır
+        $request = new CreateApprovalRequest();
+        $request->setLocale($requestData['locale'] ?? Locale::TR);
+        $request->setConversationId($requestData['conversationId'] ?? (string) microtime(true));
+        $request->setPaymentTransactionId((string) $requestData['paymentTransactionId']);
 
-        $resp = Disapproval::create($req, $this->options);
+        $response = Disapproval::create($request, $this->options);
 
-        return $this->responseToArray($resp);
+        return $this->normalizeResponse($response);
     }
 
-    /* =========================
-     * Helpers
-     * ========================= */
+    /* ============================================================
+     * HELPER METHODS
+     * ============================================================
+     */
 
     /**
-     * Zorunlu alan kontrolü (null/boş string kabul edilmez)
+     * Zorunlu alan kontrolü
      *
      * @param array<string,mixed> $data
-     * @param string[] $fields
+     * @param string[] $requiredFields
      */
-    private function require(array $data, array $fields): void
+    private function requireFields(array $data, array $requiredFields): void
     {
-        foreach ($fields as $f) {
-            if (!array_key_exists($f, $data) || $data[$f] === null || $data[$f] === '') {
-                throw new InvalidArgumentException("Missing required field: {$f}");
+        foreach ($requiredFields as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                throw new InvalidArgumentException("Required field missing: {$field}");
             }
         }
     }
 
     /**
-     * Iyzipay response nesnesini okunaklı diziye çevirir.
+     * Iyzipay response objesini okunabilir tek tip diziye çevirir.
      *
-     * Dönen ortak alanlar:
-     * - ok: status === "success" ise true
-     * - status, errorCode, errorMessage
-     * - raw: ham JSON (array) veya parse edilemediyse string
-     *
-     * @param object $response Iyzipay\Model\* nesnesi
+     * @param object $response
      * @return array<string,mixed>
      */
-    private function responseToArray(object $response): array
+    private function normalizeResponse(object $response): array
     {
-        $raw = method_exists($response, 'getRawResult') ? $response->getRawResult() : null;
-        $arr = $raw ? json_decode($raw, true) : [];
+        $rawResult = method_exists($response, 'getRawResult') ? $response->getRawResult() : null;
+        $rawArray = ($rawResult && is_string($rawResult)) ? json_decode($rawResult, true) : null;
 
-        $status = method_exists($response, 'getStatus') ? $response->getStatus() : ($arr['status'] ?? null);
-        $errCode = method_exists($response, 'getErrorCode') ? $response->getErrorCode() : ($arr['errorCode'] ?? null);
-        $errMsg = method_exists($response, 'getErrorMessage') ? $response->getErrorMessage() : ($arr['errorMessage'] ?? null);
+        $status = method_exists($response, 'getStatus') ? $response->getStatus() : ($rawArray['status'] ?? null);
+        $errorCode = method_exists($response, 'getErrorCode') ? $response->getErrorCode() : ($rawArray['errorCode'] ?? null);
+        $errorMessage = method_exists($response, 'getErrorMessage') ? $response->getErrorMessage() : ($rawArray['errorMessage'] ?? null);
 
         return [
             'ok' => ($status === 'success'),
             'status' => $status,
-            'errorCode' => $errCode,
-            'errorMessage' => $errMsg,
-            'raw' => $arr ?: $raw,
+            'errorCode' => $errorCode,
+            'errorMessage' => $errorMessage,
+            'raw' => $rawArray ?: $rawResult,
         ];
     }
 }

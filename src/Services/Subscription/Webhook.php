@@ -10,12 +10,11 @@ use Eren5\PhpIyzico\OptionsFactory;
  * X-Iyz-Signature-V3 doğrulama yardımcısı
  *
  * Not: iyzico event tipine göre imzalanan alanların sırası değişebilir.
- * Bu helper, en yaygın bileşimleri kapsayan basit bir heuristik uygular.
- * Canlıda mutlaka event tipine göre (iyziEventType) net formülü teyit edin.
+ * Bu helper en yaygın varyasyonları ele alır.
  */
 final class Webhook
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
@@ -25,39 +24,55 @@ final class Webhook
      */
     public function verifySignatureV3(array $payload, array $headers): bool
     {
-        $options = OptionsFactory::create($this->cfg);
-        $secret = (string) $options->getSecretKey();
-        $header = $headers['X-Iyz-Signature-V3'] ?? $headers['x-iyz-signature-v3'] ?? '';
-        if ($header === '' || $secret === '') {
+        $options = OptionsFactory::create($this->config);
+        $secretKey = (string) $options->getSecretKey();
+
+        // Header anahtarı büyük/küçük fark etmeyecek şekilde yakalanır
+        $signatureHeader =
+            $headers['X-Iyz-Signature-V3']
+            ?? $headers['x-iyz-signature-v3']
+            ?? '';
+
+        if ($signatureHeader === '' || $secretKey === '') {
             return false;
         }
 
-        // Basit kural: CF/PWI (token mevcut) ya da API (token yok)
-        // Abonelik event'lerinde alanlar değişebilir; payload'a göre genişlet.
-        $parts = [$secret];
+        // İmzaya dahil edilecek parçalar
+        $signatureParts = [$secretKey];
 
+        // Alanların varlığına göre ekleme yapılır (event tipine göre değişiklik gösterebilir)
         if (!empty($payload['iyziEventType'])) {
-            $parts[] = (string) $payload['iyziEventType'];
+            $signatureParts[] = (string) $payload['iyziEventType'];
         }
+
         if (!empty($payload['iyziPaymentId'])) {
-            $parts[] = (string) $payload['iyziPaymentId'];
+            $signatureParts[] = (string) $payload['iyziPaymentId'];
         }
-        if (!empty($payload['paymentId'])) { // bazı eventlerde paymentId ismi
-            $parts[] = (string) $payload['paymentId'];
+
+        if (!empty($payload['paymentId'])) {
+            $signatureParts[] = (string) $payload['paymentId'];
         }
+
         if (!empty($payload['token'])) {
-            $parts[] = (string) $payload['token'];
+            $signatureParts[] = (string) $payload['token'];
         }
+
         if (!empty($payload['paymentConversationId'])) {
-            $parts[] = (string) $payload['paymentConversationId'];
+            $signatureParts[] = (string) $payload['paymentConversationId'];
         }
+
         if (!empty($payload['status'])) {
-            $parts[] = (string) $payload['status'];
+            $signatureParts[] = (string) $payload['status'];
         }
 
-        $dataToSign = implode('', $parts);
-        $calc = bin2hex(hash_hmac('sha256', $dataToSign, $secret, true));
+        // Concatenate
+        $rawData = implode('', $signatureParts);
 
-        return hash_equals((string) $header, $calc);
+        // İmza hesapla
+        $calculatedSignature = bin2hex(
+            hash_hmac('sha256', $rawData, $secretKey, true)
+        );
+
+        return hash_equals((string) $signatureHeader, $calculatedSignature);
     }
 }

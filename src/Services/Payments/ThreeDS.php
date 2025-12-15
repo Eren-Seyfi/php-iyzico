@@ -15,142 +15,175 @@ use Iyzipay\Model\PaymentGroup;
 use Iyzipay\Model\ThreedsInitialize;
 use Iyzipay\Model\ThreedsPayment;
 
-use Iyzipay\Request\CreatePaymentRequest;         // 3DS INIT
-use Iyzipay\Request\CreateThreedsPaymentRequest; // 3DS AUTH
+use Iyzipay\Request\CreatePaymentRequest;          // 3DS INIT
+use Iyzipay\Request\CreateThreedsPaymentRequest;   // 3DS AUTH
 
 final class ThreeDS
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
-     * 3DS Başlatma (ThreedsInitialize)
+     * 3D Secure Başlatma
      *
      * @param array{
      *   price:numeric-string|int|float,
      *   paidPrice?:numeric-string|int|float,
-     *   currency?:string,                // Iyzipay\Model\Currency::TL|USD|EUR ...
-     *   installment?:int,                // 1..12
+     *   currency?:string,
+     *   installment?:int,
      *   basketId?:string,
      *   locale?:string,
      *   conversationId?:string,
-     *   paymentChannel?:string,          // Iyzipay\Model\PaymentChannel::WEB ...
-     *   paymentGroup?:string             // Iyzipay\Model\PaymentGroup::PRODUCT ...
-     * } $order
-     * @param array<string,mixed> $buyer
-     * @param array<string,mixed> $shipAddress
-     * @param array<string,mixed> $billAddress
-     * @param array<int,array<string,mixed>> $basketItems
+     *   paymentChannel?:string,
+     *   paymentGroup?:string
+     * } $orderData
+     * @param array<string,mixed> $buyerData
+     * @param array<string,mixed> $shippingAddressData
+     * @param array<string,mixed> $billingAddressData
+     * @param array<int,array<string,mixed>> $basketItemsData
      */
-    public function init(
-        array $order,
-        PaymentCard $card,
-        array $buyer,
-        array $shipAddress,
-        array $billAddress,
-        array $basketItems,
+    public function initialize3DS(
+        array $orderData,
+        PaymentCard $paymentCard,
+        array $buyerData,
+        array $shippingAddressData,
+        array $billingAddressData,
+        array $basketItemsData,
         string $callbackUrl
     ): ThreedsInitialize {
-        $r = new CreatePaymentRequest(); // SDK: 3DS init bu istekle
+        $request = new CreatePaymentRequest();
 
-        $r->setLocale($order['locale'] ?? $this->cfg->locale);
-        $r->setConversationId($order['conversationId'] ?? $this->cfg->conversationId);
+        $request->setLocale($orderData['locale'] ?? $this->config->locale);
+        $request->setConversationId($orderData['conversationId'] ?? $this->config->conversationId);
 
-        // Zorunlular
-        $r->setPrice((string) $order['price']);
-        $r->setPaidPrice((string) ($order['paidPrice'] ?? $order['price']));
-        $r->setCurrency($order['currency'] ?? Currency::TL);
-        $r->setInstallment((int) ($order['installment'] ?? 1));
+        // Zorunlu alanlar
+        $request->setPrice((string) $orderData['price']);
+        $request->setPaidPrice((string) ($orderData['paidPrice'] ?? $orderData['price']));
+        $request->setCurrency($orderData['currency'] ?? Currency::TL);
+        $request->setInstallment((int) ($orderData['installment'] ?? 1));
 
         // Opsiyoneller
-        if (!empty($order['basketId'])) {
-            $r->setBasketId((string) $order['basketId']);
+        if (!empty($orderData['basketId'])) {
+            $request->setBasketId((string) $orderData['basketId']);
         }
-        $r->setPaymentChannel($order['paymentChannel'] ?? PaymentChannel::WEB);
-        $r->setPaymentGroup($order['paymentGroup'] ?? PaymentGroup::PRODUCT);
 
-        // Kart, alıcı, adresler, sepet
-        $r->setPaymentCard($card);
-        $r->setBuyer(Helpers::buyer($buyer));
-        $r->setShippingAddress(Helpers::address($shipAddress));
-        $r->setBillingAddress(Helpers::address($billAddress));
+        $request->setPaymentChannel($orderData['paymentChannel'] ?? PaymentChannel::WEB);
+        $request->setPaymentGroup($orderData['paymentGroup'] ?? PaymentGroup::PRODUCT);
 
-        $items = [];
-        foreach ($basketItems as $it) {
-            $items[] = Helpers::basketItem($it);
+        // Kart – Alıcı – Adresler – Sepet
+        $request->setPaymentCard($paymentCard);
+        $request->setBuyer(Helpers::buyer($buyerData));
+        $request->setShippingAddress(Helpers::address($shippingAddressData));
+        $request->setBillingAddress(Helpers::address($billingAddressData));
+
+        $basketItems = [];
+        foreach ($basketItemsData as $itemData) {
+            $basketItems[] = Helpers::basketItem($itemData);
         }
-        $r->setBasketItems($items);
+        $request->setBasketItems($basketItems);
 
-        // 3DS init için zorunlu
-        $r->setCallbackUrl($callbackUrl);
+        // 3DS Init için zorunlu callback
+        $request->setCallbackUrl($callbackUrl);
 
-        return ThreedsInitialize::create($r, OptionsFactory::create($this->cfg));
+        return ThreedsInitialize::create($request, OptionsFactory::create($this->config));
     }
 
     /**
      * 3DS Başlatma + İmza Doğrulama
+     *
      * Doküman sırası: [paymentId, conversationId]
-     * @return array{init: ThreedsInitialize, verified: bool, calculated: string}
+     *
+     * @return array{
+     *   initializeResult: ThreedsInitialize,
+     *   verified: bool,
+     *   calculatedSignature: string
+     * }
      */
-    public function initAndVerify(
-        array $order,
-        PaymentCard $card,
-        array $buyer,
-        array $shipAddress,
-        array $billAddress,
-        array $basketItems,
+    public function initialize3DSAndVerify(
+        array $orderData,
+        PaymentCard $paymentCard,
+        array $buyerData,
+        array $shippingAddressData,
+        array $billingAddressData,
+        array $basketItemsData,
         string $callbackUrl
     ): array {
-        $opt = OptionsFactory::create($this->cfg);
-        $init = $this->init($order, $card, $buyer, $shipAddress, $billAddress, $basketItems, $callbackUrl);
+        $options = OptionsFactory::create($this->config);
+
+        $initializeResult = $this->initialize3DS(
+            $orderData,
+            $paymentCard,
+            $buyerData,
+            $shippingAddressData,
+            $billingAddressData,
+            $basketItemsData,
+            $callbackUrl
+        );
 
         $params = [
-            (string) $init->getPaymentId(),
-            (string) $init->getConversationId(),
+            (string) $initializeResult->getPaymentId(),
+            (string) $initializeResult->getConversationId(),
         ];
-        $calc = Signature::calculate($params, (string) $opt->getSecretKey());
-        $verified = ((string) $init->getSignature() === $calc);
 
-        return ['init' => $init, 'verified' => $verified, 'calculated' => $calc];
+        $calculatedSignature = Signature::calculate($params, (string) $options->getSecretKey());
+        $verified = ((string) $initializeResult->getSignature() === $calculatedSignature);
+
+        return [
+            'initializeResult' => $initializeResult,
+            'verified' => $verified,
+            'calculatedSignature' => $calculatedSignature,
+        ];
     }
 
     /**
-     * 3DS Tamamlama (ThreedsPayment)
+     * 3DS Auth (Tamamlama)
      * callback'ten gelen paymentId + conversationData ile
      */
-    public function auth(string $paymentId, string $conversationData): ThreedsPayment
+    public function complete3DS(string $paymentId, string $conversationData): ThreedsPayment
     {
-        $r = new CreateThreedsPaymentRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPaymentId($paymentId);
-        $r->setConversationData($conversationData);
+        $request = new CreateThreedsPaymentRequest();
+        $request->setLocale($this->config->locale);
+        $request->setConversationId($this->config->conversationId);
+        $request->setPaymentId($paymentId);
+        $request->setConversationData($conversationData);
 
-        return ThreedsPayment::create($r, OptionsFactory::create($this->cfg));
+        return ThreedsPayment::create($request, OptionsFactory::create($this->config));
     }
 
     /**
-     * 3DS Tamamlama + İmza Doğrulama
-     * Doküman sırası: [paymentId, currency, basketId, conversationId, paidPrice, price]
-     * @return array{payment: ThreedsPayment, verified: bool, calculated: string}
+     * 3DS Auth + Signature Verification
+     *
+     * Doküman imza sırası:
+     * [paymentId, currency, basketId, conversationId, paidPrice, price]
+     *
+     * @return array{
+     *   paymentResult: ThreedsPayment,
+     *   verified: bool,
+     *   calculatedSignature: string
+     * }
      */
-    public function authAndVerify(string $paymentId, string $conversationData): array
+    public function complete3DSAndVerify(string $paymentId, string $conversationData): array
     {
-        $opt = OptionsFactory::create($this->cfg);
-        $payment = $this->auth($paymentId, $conversationData);
+        $options = OptionsFactory::create($this->config);
+        $paymentResult = $this->complete3DS($paymentId, $conversationData);
 
         $params = [
-            (string) $payment->getPaymentId(),
-            (string) $payment->getCurrency(),
-            (string) $payment->getBasketId(),
-            (string) $payment->getConversationId(),
-            (string) $payment->getPaidPrice(),
-            (string) $payment->getPrice(),
+            (string) $paymentResult->getPaymentId(),
+            (string) $paymentResult->getCurrency(),
+            (string) $paymentResult->getBasketId(),
+            (string) $paymentResult->getConversationId(),
+            (string) $paymentResult->getPaidPrice(),
+            (string) $paymentResult->getPrice(),
         ];
-        $calc = Signature::calculate($params, (string) $opt->getSecretKey());
-        $verified = ((string) $payment->getSignature() === $calc);
 
-        return ['payment' => $payment, 'verified' => $verified, 'calculated' => $calc];
+        $calculatedSignature = Signature::calculate($params, (string) $options->getSecretKey());
+        $verified = ((string) $paymentResult->getSignature() === $calculatedSignature);
+
+        return [
+            'paymentResult' => $paymentResult,
+            'verified' => $verified,
+            'calculatedSignature' => $calculatedSignature,
+        ];
     }
 }

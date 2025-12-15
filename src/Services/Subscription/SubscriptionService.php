@@ -34,285 +34,314 @@ use Iyzipay\Model\Subscription\SubscriptionDetails;
 use Iyzipay\Model\Subscription\RetrieveList;
 
 /**
- * Abonelik işlemleri (checkout formu, create, upgrade, cancel, search, card update vb.)
+ * Abonelik işlemleri servisi
  */
 final class SubscriptionService
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
-
     }
 
     /**
-     * Checkout Form ile abonelik başlatma (iyzico hosted form)
-     *
-     * @param array{
-     *   pricingPlanReferenceCode:string,
-     *   subscriptionInitialStatus?:'ACTIVE'|'PENDING',
-     *   callbackUrl?:string
-     * } $data
-     * @param array<string,string> $customerData  // Customer alanları (name,surname,email,... shipping/billing)
+     * Checkout Form ile abonelik başlatma
      */
-    public function createCheckoutForm(array $data, array $customerData)
+    public function createCheckoutForm(array $subscriptionData, array $customerData)
     {
-        $r = new SubscriptionCreateCheckoutFormRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPricingPlanReferenceCode((string) $data['pricingPlanReferenceCode']);
+        $createCheckoutFormRequest = new SubscriptionCreateCheckoutFormRequest();
+        $createCheckoutFormRequest->setLocale($this->config->locale);
+        $createCheckoutFormRequest->setConversationId($this->config->conversationId);
+        $createCheckoutFormRequest->setPricingPlanReferenceCode((string) $subscriptionData['pricingPlanReferenceCode']);
 
-        if (!empty($data['subscriptionInitialStatus'])) {
-            $r->setSubscriptionInitialStatus((string) $data['subscriptionInitialStatus']); // ACTIVE|PENDING
-        }
-        if (!empty($data['callbackUrl'])) {
-            $r->setCallbackUrl((string) $data['callbackUrl']);
+        if (!empty($subscriptionData['subscriptionInitialStatus'])) {
+            $createCheckoutFormRequest->setSubscriptionInitialStatus((string) $subscriptionData['subscriptionInitialStatus']);
         }
 
-        $customer = $this->buildCustomer($customerData);
-        $r->setCustomer($customer);
+        if (!empty($subscriptionData['callbackUrl'])) {
+            $createCheckoutFormRequest->setCallbackUrl((string) $subscriptionData['callbackUrl']);
+        }
 
-        return SubscriptionCreateCheckoutForm::create($r, OptionsFactory::create($this->cfg));
+        $customerModel = $this->buildCustomer($customerData);
+        $createCheckoutFormRequest->setCustomer($customerModel);
+
+        return SubscriptionCreateCheckoutForm::create(
+            $createCheckoutFormRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Checkout form sonucunu token ile çek */
+    /**
+     * Checkout formu sonucunu token ile döndürür
+     */
     public function retrieveCheckoutFormResult(string $checkoutFormToken)
     {
-        $r = new RetrieveSubscriptionCreateCheckoutFormRequest();
-        $r->setCheckoutFormToken($checkoutFormToken);
+        $retrieveFormRequest = new RetrieveSubscriptionCreateCheckoutFormRequest();
+        $retrieveFormRequest->setCheckoutFormToken($checkoutFormToken);
 
-        return RetrieveSubscriptionCheckoutForm::retrieve($r, OptionsFactory::create($this->cfg));
+        return RetrieveSubscriptionCheckoutForm::retrieve(
+            $retrieveFormRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * NON3D abonelik başlatma (kredi kartı ile doğrudan)
-     *
-     * @param array{pricingPlanReferenceCode:string, subscriptionInitialStatus?:'ACTIVE'|'PENDING'} $data
-     * @param array{cardHolderName:string, cardNumber:string, expireMonth:string, expireYear:string, cvc:string} $paymentCardData
-     * @param array<string,string> $customerData
+     * NON-3D Kredi Kartı ile doğrudan abonelik oluşturma
      */
-    public function createNon3D(array $data, array $paymentCardData, array $customerData)
+    public function createNon3D(array $subscriptionData, array $paymentCardData, array $customerData)
     {
-        $r = new SubscriptionCreateRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPricingPlanReferenceCode((string) $data['pricingPlanReferenceCode']);
+        $createSubscriptionRequest = new SubscriptionCreateRequest();
+        $createSubscriptionRequest->setLocale($this->config->locale);
+        $createSubscriptionRequest->setConversationId($this->config->conversationId);
+        $createSubscriptionRequest->setPricingPlanReferenceCode((string) $subscriptionData['pricingPlanReferenceCode']);
 
-        if (!empty($data['subscriptionInitialStatus'])) {
-            $r->setSubscriptionInitialStatus((string) $data['subscriptionInitialStatus']); // PENDING/ACTIVE
+        if (!empty($subscriptionData['subscriptionInitialStatus'])) {
+            $createSubscriptionRequest->setSubscriptionInitialStatus((string) $subscriptionData['subscriptionInitialStatus']);
         }
 
-        $pc = new PaymentCard();
-        $pc->setCardHolderName((string) $paymentCardData['cardHolderName']);
-        $pc->setCardNumber((string) $paymentCardData['cardNumber']);
-        $pc->setExpireMonth((string) $paymentCardData['expireMonth']);
-        $pc->setExpireYear((string) $paymentCardData['expireYear']);
-        $pc->setCvc((string) $paymentCardData['cvc']);
-        $r->setPaymentCard($pc);
+        $paymentCardModel = new PaymentCard();
+        $paymentCardModel->setCardHolderName((string) $paymentCardData['cardHolderName']);
+        $paymentCardModel->setCardNumber((string) $paymentCardData['cardNumber']);
+        $paymentCardModel->setExpireMonth((string) $paymentCardData['expireMonth']);
+        $paymentCardModel->setExpireYear((string) $paymentCardData['expireYear']);
+        $paymentCardModel->setCvc((string) $paymentCardData['cvc']);
+        $createSubscriptionRequest->setPaymentCard($paymentCardModel);
 
-        $customer = $this->buildCustomer($customerData);
-        $r->setCustomer($customer);
+        $customerModel = $this->buildCustomer($customerData);
+        $createSubscriptionRequest->setCustomer($customerModel);
 
-        return SubscriptionCreate::create($r, OptionsFactory::create($this->cfg));
+        return SubscriptionCreate::create(
+            $createSubscriptionRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
      * Mevcut müşteri ile abonelik başlatma
-     *
-     * @param array{
-     *   pricingPlanReferenceCode:string,
-     *   customerReferenceCode:string,
-     *   subscriptionInitialStatus?:'ACTIVE'|'PENDING'
-     * } $data
      */
-    public function createWithCustomer(array $data)
+    public function createWithCustomer(array $subscriptionData)
     {
-        $r = new SubscriptionCreateWithCustomerRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPricingPlanReferenceCode((string) $data['pricingPlanReferenceCode']);
-        $r->setCustomerReferenceCode((string) $data['customerReferenceCode']);
+        $createWithCustomerRequest = new SubscriptionCreateWithCustomerRequest();
+        $createWithCustomerRequest->setLocale($this->config->locale);
+        $createWithCustomerRequest->setConversationId($this->config->conversationId);
+        $createWithCustomerRequest->setPricingPlanReferenceCode((string) $subscriptionData['pricingPlanReferenceCode']);
+        $createWithCustomerRequest->setCustomerReferenceCode((string) $subscriptionData['customerReferenceCode']);
 
-        if (!empty($data['subscriptionInitialStatus'])) {
-            $r->setSubscriptionInitialStatus((string) $data['subscriptionInitialStatus']);
+        if (!empty($subscriptionData['subscriptionInitialStatus'])) {
+            $createWithCustomerRequest->setSubscriptionInitialStatus((string) $subscriptionData['subscriptionInitialStatus']);
         }
 
-        return SubscriptionCreateWithCustomer::create($r, OptionsFactory::create($this->cfg));
+        return SubscriptionCreateWithCustomer::create(
+            $createWithCustomerRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Aboneliği aktifleştir */
-    public function activate(string $subscriptionRef)
+    /**
+     * Aboneliği aktifleştir
+     */
+    public function activate(string $subscriptionReferenceCode)
     {
-        $r = new SubscriptionActivateRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setSubscriptionReferenceCode($subscriptionRef);
+        $activateRequest = new SubscriptionActivateRequest();
+        $activateRequest->setLocale($this->config->locale);
+        $activateRequest->setConversationId($this->config->conversationId);
+        $activateRequest->setSubscriptionReferenceCode($subscriptionReferenceCode);
 
-        return SubscriptionActivate::update($r, OptionsFactory::create($this->cfg));
+        return SubscriptionActivate::update(
+            $activateRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Başarısız ödemeyi/denemeyi tekrar dene (retry) */
-    public function retry(string $referenceCode)
+    /**
+     * Başarısız ödemeyi tekrar dene
+     */
+    public function retry(string $retryReferenceCode)
     {
-        $r = new SubscriptionRetryRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setReferenceCode($referenceCode);
+        $retryRequest = new SubscriptionRetryRequest();
+        $retryRequest->setLocale($this->config->locale);
+        $retryRequest->setConversationId($this->config->conversationId);
+        $retryRequest->setReferenceCode($retryReferenceCode);
 
-        return SubscriptionRetry::update($r, OptionsFactory::create($this->cfg));
+        return SubscriptionRetry::update(
+            $retryRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
      * Aboneliği başka bir plana yükselt
-     *
-     * @param array{
-     *   subscriptionReferenceCode:string,
-     *   newPricingPlanReferenceCode:string,
-     *   upgradePeriod:'NOW'|'NEXT_PERIOD',
-     *   useTrial?:bool,
-     *   resetRecurrenceCount?:bool
-     * } $data
      */
-    public function upgrade(array $data)
+    public function upgrade(array $upgradeData)
     {
-        $r = new SubscriptionUpgradeRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setSubscriptionReferenceCode((string) $data['subscriptionReferenceCode']);
-        $r->setNewPricingPlanReferenceCode((string) $data['newPricingPlanReferenceCode']);
-        $r->setUpgradePeriod((string) $data['upgradePeriod']); // NOW | NEXT_PERIOD
+        $upgradeRequest = new SubscriptionUpgradeRequest();
+        $upgradeRequest->setLocale($this->config->locale);
+        $upgradeRequest->setConversationId($this->config->conversationId);
+        $upgradeRequest->setSubscriptionReferenceCode((string) $upgradeData['subscriptionReferenceCode']);
+        $upgradeRequest->setNewPricingPlanReferenceCode((string) $upgradeData['newPricingPlanReferenceCode']);
+        $upgradeRequest->setUpgradePeriod((string) $upgradeData['upgradePeriod']);
 
-        if (array_key_exists('useTrial', $data)) {
-            $r->setUseTrial((bool) $data['useTrial']);
+        if (array_key_exists('useTrial', $upgradeData)) {
+            $upgradeRequest->setUseTrial((bool) $upgradeData['useTrial']);
         }
-        if (array_key_exists('resetRecurrenceCount', $data)) {
-            $r->setResetRecurrenceCount((bool) $data['resetRecurrenceCount']);
+        if (array_key_exists('resetRecurrenceCount', $upgradeData)) {
+            $upgradeRequest->setResetRecurrenceCount((bool) $upgradeData['resetRecurrenceCount']);
         }
 
-        return SubscriptionUpgrade::update($r, OptionsFactory::create($this->cfg));
-    }
-
-    /** Aboneliği iptal et */
-    public function cancel(string $subscriptionRef)
-    {
-        $r = new SubscriptionCancelRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setSubscriptionReferenceCode($subscriptionRef);
-
-        return SubscriptionCancel::cancel($r, OptionsFactory::create($this->cfg));
-    }
-
-    /** Abonelik detayı */
-    public function details(string $subscriptionRef)
-    {
-        $r = new SubscriptionDetailsRequest();
-        $r->setSubscriptionReferenceCode($subscriptionRef);
-
-        return SubscriptionDetails::retrieve($r, OptionsFactory::create($this->cfg));
+        return SubscriptionUpgrade::update(
+            $upgradeRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * Abonelik arama (RetrieveList::subscriptions)
-     *
-     * @param array{
-     *   page?:int, count?:int,
-     *   subscriptionStatus?:'ACTIVE'|'PENDING'|'CANCELED'|'UNPAID'|string,
-     *   startDate?:string, endDate?:string, // 'YYYY-MM-DD'
-     *   pricingPlanReferenceCode?:string
-     * } $filters
+     * Aboneliği iptal et
+     */
+    public function cancel(string $subscriptionReferenceCode)
+    {
+        $cancelRequest = new SubscriptionCancelRequest();
+        $cancelRequest->setLocale($this->config->locale);
+        $cancelRequest->setConversationId($this->config->conversationId);
+        $cancelRequest->setSubscriptionReferenceCode($subscriptionReferenceCode);
+
+        return SubscriptionCancel::cancel(
+            $cancelRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Abonelik detaylarını getir
+     */
+    public function details(string $subscriptionReferenceCode)
+    {
+        $detailsRequest = new SubscriptionDetailsRequest();
+        $detailsRequest->setSubscriptionReferenceCode($subscriptionReferenceCode);
+
+        return SubscriptionDetails::retrieve(
+            $detailsRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Abonelik arama
      */
     public function search(array $filters = [])
     {
-        $r = new SubscriptionSearchRequest();
+        $searchRequest = new SubscriptionSearchRequest();
 
-        if (isset($filters['page']) && method_exists($r, 'setPage')) {
-            $r->setPage((int) $filters['page']);
+        if (isset($filters['page']) && method_exists($searchRequest, 'setPage')) {
+            $searchRequest->setPage((int) $filters['page']);
         }
-        if (isset($filters['count']) && method_exists($r, 'setCount')) {
-            $r->setCount((int) $filters['count']);
+        if (isset($filters['count']) && method_exists($searchRequest, 'setCount')) {
+            $searchRequest->setCount((int) $filters['count']);
         }
-        if (!empty($filters['subscriptionStatus'])) {
-            $r->setSubscriptionStatus((string) $filters['subscriptionStatus']);
+
+        if (!empty($filters['subscriptionReferenceCode'])) {
+            $searchRequest->setSubscriptionReferenceCode((string) $filters['subscriptionReferenceCode']);
         }
-        if (!empty($filters['startDate'])) {
-            $r->setStartDate((string) $filters['startDate']);
-        }
-        if (!empty($filters['endDate'])) {
-            $r->setEndDate((string) $filters['endDate']);
+        if (!empty($filters['customerReferenceCode'])) {
+            $searchRequest->setCustomerReferenceCode((string) $filters['customerReferenceCode']);
         }
         if (!empty($filters['pricingPlanReferenceCode'])) {
-            $r->setPricingPlanReferenceCode((string) $filters['pricingPlanReferenceCode']);
+            $searchRequest->setPricingPlanReferenceCode((string) $filters['pricingPlanReferenceCode']);
+        }
+        if (!empty($filters['parent'])) {
+            $searchRequest->setParentReferenceCode((string) $filters['parent']);
+        }
+        if (!empty($filters['subscriptionStatus'])) {
+            $searchRequest->setSubscriptionStatus((string) $filters['subscriptionStatus']);
+        }
+        if (!empty($filters['startDate'])) {
+            $searchRequest->setStartDate((string) $filters['startDate']);
+        }
+        if (!empty($filters['endDate'])) {
+            $searchRequest->setEndDate((string) $filters['endDate']);
         }
 
-        return RetrieveList::subscriptions($r, OptionsFactory::create($this->cfg));
+        return RetrieveList::subscriptions(
+            $searchRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * Abonelik kartı güncelleme (Checkout formu ile)
-     *
-     * @param array{
-     *   customerReferenceCode:string,
-     *   callbackUrl:string
-     * } $data
+     * Kart güncelleme checkout formu
      */
-    public function cardUpdateCheckout(array $data)
+    public function cardUpdateCheckout(array $updateData)
     {
-        $r = new SubscriptionCardUpdateRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setCustomerReferenceCode((string) $data['customerReferenceCode']);
-        $r->setCallBackUrl((string) $data['callbackUrl']);
+        $cardUpdateRequest = new SubscriptionCardUpdateRequest();
+        $cardUpdateRequest->setLocale($this->config->locale);
+        $cardUpdateRequest->setConversationId($this->config->conversationId);
+        $cardUpdateRequest->setCustomerReferenceCode((string) $updateData['customerReferenceCode']);
+        $cardUpdateRequest->setCallBackUrl((string) $updateData['callbackUrl']);
 
-        return \Iyzipay\Model\Subscription\SubscriptionCardUpdate::update($r, OptionsFactory::create($this->cfg));
+        return \Iyzipay\Model\Subscription\SubscriptionCardUpdate::update(
+            $cardUpdateRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * SDK Customer nesnesi kurucu yardımcı
-     * @param array<string,string> $data
+     * Customer model builder
      */
     private function buildCustomer(array $data): Customer
     {
-        $c = new Customer();
+        $customerModel = new Customer();
 
-        // Temel
-        if (!empty($data['name']))
-            $c->setName((string) $data['name']);
-        if (!empty($data['surname']))
-            $c->setSurname((string) $data['surname']);
-        if (!empty($data['gsmNumber']))
-            $c->setGsmNumber((string) $data['gsmNumber']);
-        if (!empty($data['email']))
-            $c->setEmail((string) $data['email']);
-        if (!empty($data['identityNumber']))
-            $c->setIdentityNumber((string) $data['identityNumber']);
+        if (!empty($data['name'])) {
+            $customerModel->setName((string) $data['name']);
+        }
+        if (!empty($data['surname'])) {
+            $customerModel->setSurname((string) $data['surname']);
+        }
+        if (!empty($data['gsmNumber'])) {
+            $customerModel->setGsmNumber((string) $data['gsmNumber']);
+        }
+        if (!empty($data['email'])) {
+            $customerModel->setEmail((string) $data['email']);
+        }
+        if (!empty($data['identityNumber'])) {
+            $customerModel->setIdentityNumber((string) $data['identityNumber']);
+        }
 
-        // Shipping
-        if (!empty($data['shippingContactName']))
-            $c->setShippingContactName((string) $data['shippingContactName']);
-        if (!empty($data['shippingCity']))
-            $c->setShippingCity((string) $data['shippingCity']);
-        if (!empty($data['shippingDistrict']))
-            $c->setShippingDistrict((string) $data['shippingDistrict']);   // <—
-        if (!empty($data['shippingCountry']))
-            $c->setShippingCountry((string) $data['shippingCountry']);
-        if (!empty($data['shippingAddress']))
-            $c->setShippingAddress((string) $data['shippingAddress']);
-        if (!empty($data['shippingZipCode']))
-            $c->setShippingZipCode((string) $data['shippingZipCode']);
+        if (!empty($data['shippingContactName'])) {
+            $customerModel->setShippingContactName((string) $data['shippingContactName']);
+        }
+        if (!empty($data['shippingCity'])) {
+            $customerModel->setShippingCity((string) $data['shippingCity']);
+        }
+        if (!empty($data['shippingDistrict'])) {
+            $customerModel->setShippingDistrict((string) $data['shippingDistrict']);
+        }
+        if (!empty($data['shippingCountry'])) {
+            $customerModel->setShippingCountry((string) $data['shippingCountry']);
+        }
+        if (!empty($data['shippingAddress'])) {
+            $customerModel->setShippingAddress((string) $data['shippingAddress']);
+        }
+        if (!empty($data['shippingZipCode'])) {
+            $customerModel->setShippingZipCode((string) $data['shippingZipCode']);
+        }
 
-        // Billing
-        if (!empty($data['billingContactName']))
-            $c->setBillingContactName((string) $data['billingContactName']);
-        if (!empty($data['billingCity']))
-            $c->setBillingCity((string) $data['billingCity']);
-        if (!empty($data['billingDistrict']))
-            $c->setBillingDistrict((string) $data['billingDistrict']);     // <—
-        if (!empty($data['billingCountry']))
-            $c->setBillingCountry((string) $data['billingCountry']);
-        if (!empty($data['billingAddress']))
-            $c->setBillingAddress((string) $data['billingAddress']);
-        if (!empty($data['billingZipCode']))
-            $c->setBillingZipCode((string) $data['billingZipCode']);
+        if (!empty($data['billingContactName'])) {
+            $customerModel->setBillingContactName((string) $data['billingContactName']);
+        }
+        if (!empty($data['billingCity'])) {
+            $customerModel->setBillingCity((string) $data['billingCity']);
+        }
+        if (!empty($data['billingDistrict'])) {
+            $customerModel->setBillingDistrict((string) $data['billingDistrict']);
+        }
+        if (!empty($data['billingCountry'])) {
+            $customerModel->setBillingCountry((string) $data['billingCountry']);
+        }
+        if (!empty($data['billingAddress'])) {
+            $customerModel->setBillingAddress((string) $data['billingAddress']);
+        }
+        if (!empty($data['billingZipCode'])) {
+            $customerModel->setBillingZipCode((string) $data['billingZipCode']);
+        }
 
-        return $c;
+        return $customerModel;
     }
 }

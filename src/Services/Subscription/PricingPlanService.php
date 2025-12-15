@@ -7,7 +7,7 @@ use Eren5\PhpIyzico\Config;
 use Eren5\PhpIyzico\OptionsFactory;
 
 use Iyzipay\Model\Subscription\SubscriptionPricingPlan;
-use Iyzipay\Model\Subscription\RetrieveList; // <- Listeleme için gerekli
+use Iyzipay\Model\Subscription\RetrieveList;
 use Iyzipay\Request\Subscription\SubscriptionCreatePricingPlanRequest;
 use Iyzipay\Request\Subscription\SubscriptionUpdatePricingPlanRequest;
 use Iyzipay\Request\Subscription\SubscriptionDeletePricingPlanRequest;
@@ -15,109 +15,133 @@ use Iyzipay\Request\Subscription\SubscriptionRetrievePricingPlanRequest;
 use Iyzipay\Request\Subscription\SubscriptionListPricingPlanRequest;
 
 /**
- * Plan CRUD (Pricing Plan)
+ * Pricing Plan CRUD işlemleri
  */
 final class PricingPlanService
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
-     * Plan oluştur.
-     * Zorunlular: name, productReferenceCode, price, currencyCode, paymentInterval, paymentIntervalCount
-     * Opsiyoneller: trialPeriodDays, planPaymentType (RECURRING|PREPAID), recurrenceCount
-     * @param array<string,mixed> $data
+     * Plan oluşturma
+     *
+     * @param array<string,mixed> $planData
      */
-    public function create(array $data)
+    public function create(array $planData)
     {
-        $r = new SubscriptionCreatePricingPlanRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
+        $createPricingPlanRequest = new SubscriptionCreatePricingPlanRequest();
+        $createPricingPlanRequest->setLocale($this->config->locale);
+        $createPricingPlanRequest->setConversationId($this->config->conversationId);
 
         // Zorunlu alanlar
-        $r->setName((string) $data['name']);
-        $r->setProductReferenceCode((string) $data['productReferenceCode']);
-        $r->setPrice((string) $data['price']);
-        $r->setCurrencyCode((string) $data['currencyCode']);        // TRY|USD|EUR...
-        $r->setPaymentInterval((string) $data['paymentInterval']);  // DAILY|WEEKLY|MONTHLY|YEARLY (SDK’a göre)
-        $r->setPaymentIntervalCount((int) $data['paymentIntervalCount']);
+        $createPricingPlanRequest->setName((string) $planData['name']);
+        $createPricingPlanRequest->setProductReferenceCode((string) $planData['productReferenceCode']);
+        $createPricingPlanRequest->setPrice((string) $planData['price']);
+        $createPricingPlanRequest->setCurrencyCode((string) $planData['currencyCode']);
+        $createPricingPlanRequest->setPaymentInterval((string) $planData['paymentInterval']);
+        $createPricingPlanRequest->setPaymentIntervalCount((int) $planData['paymentIntervalCount']);
 
         // Opsiyoneller
-        if (isset($data['trialPeriodDays'])) {
-            $r->setTrialPeriodDays((int) $data['trialPeriodDays']);
-        }
-        if (isset($data['planPaymentType'])) {
-            $r->setPlanPaymentType((string) $data['planPaymentType']); // RECURRING|PREPAID
-        }
-        if (array_key_exists('recurrenceCount', $data)) {
-            $r->setRecurrenceCount($data['recurrenceCount'] !== null ? (int) $data['recurrenceCount'] : null);
+        if (isset($planData['trialPeriodDays'])) {
+            $createPricingPlanRequest->setTrialPeriodDays((int) $planData['trialPeriodDays']);
         }
 
-        return SubscriptionPricingPlan::create($r, OptionsFactory::create($this->cfg));
-    }
-
-    /** Plan getir (referenceCode ile) */
-    public function retrieve(string $planRef)
-    {
-        $r = new SubscriptionRetrievePricingPlanRequest();
-        // SDK örneğinde locale/conversationId olmasa da eklemek zararsız
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPricingPlanReferenceCode($planRef);
-
-        return SubscriptionPricingPlan::retrieve($r, OptionsFactory::create($this->cfg));
-    }
-
-    /** Bir ürün altındaki planları listele */
-    public function list(string $productRef, int $page = 1, int $count = 20)
-    {
-        $r = new SubscriptionListPricingPlanRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setProductReferenceCode($productRef);
-
-        if (method_exists($r, 'setPage')) {
-            $r->setPage($page);
-        }
-        if (method_exists($r, 'setCount')) {
-            $r->setCount($count);
+        if (isset($planData['planPaymentType'])) {
+            $createPricingPlanRequest->setPlanPaymentType((string) $planData['planPaymentType']); // RECURRING or PREPAID
         }
 
-        // DÜZELTME: SubscriptionPricingPlan::list(...) yerine RetrieveList::pricingPlan(...)
-        return RetrieveList::pricingPlan($r, OptionsFactory::create($this->cfg));
+        if (array_key_exists('recurrenceCount', $planData)) {
+            $recurrenceCount = $planData['recurrenceCount'];
+            $createPricingPlanRequest->setRecurrenceCount(
+                $recurrenceCount !== null ? (int) $recurrenceCount : null
+            );
+        }
+
+        return SubscriptionPricingPlan::create(
+            $createPricingPlanRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * Plan güncelle
-     * SDK örneğine uygun olarak yalnızca name ve trialPeriodDays güncelleniyor.
-     * @param array{name?:string, trialPeriodDays?:int} $data
+     * Tek plan getirme
      */
-    public function update(string $planRef, array $data)
+    public function retrieve(string $planReferenceCode)
     {
-        $r = new SubscriptionUpdatePricingPlanRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPricingPlanReferenceCode($planRef);
+        $retrievePricingPlanRequest = new SubscriptionRetrievePricingPlanRequest();
+        $retrievePricingPlanRequest->setLocale($this->config->locale);
+        $retrievePricingPlanRequest->setConversationId($this->config->conversationId);
+        $retrievePricingPlanRequest->setPricingPlanReferenceCode($planReferenceCode);
 
-        if (isset($data['name'])) {
-            $r->setName((string) $data['name']);
-        }
-        if (isset($data['trialPeriodDays'])) {
-            $r->setTrialPeriodDays((int) $data['trialPeriodDays']);
-        }
-
-        return SubscriptionPricingPlan::update($r, OptionsFactory::create($this->cfg));
+        return SubscriptionPricingPlan::retrieve(
+            $retrievePricingPlanRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Plan sil */
-    public function delete(string $planRef)
+    /**
+     * Bir ürün altındaki tüm planları listeleme
+     */
+    public function list(string $productReferenceCode, int $page = 1, int $count = 20)
     {
-        $r = new SubscriptionDeletePricingPlanRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setPricingPlanReferenceCode($planRef);
+        $listPricingPlanRequest = new SubscriptionListPricingPlanRequest();
+        $listPricingPlanRequest->setLocale($this->config->locale);
+        $listPricingPlanRequest->setConversationId($this->config->conversationId);
+        $listPricingPlanRequest->setProductReferenceCode($productReferenceCode);
 
-        return SubscriptionPricingPlan::delete($r, OptionsFactory::create($this->cfg));
+        if (method_exists($listPricingPlanRequest, 'setPage')) {
+            $listPricingPlanRequest->setPage($page);
+        }
+        if (method_exists($listPricingPlanRequest, 'setCount')) {
+            $listPricingPlanRequest->setCount($count);
+        }
+
+        return RetrieveList::pricingPlan(
+            $listPricingPlanRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Plan güncelleme
+     *
+     * @param array{name?:string, trialPeriodDays?:int} $updateData
+     */
+    public function update(string $planReferenceCode, array $updateData)
+    {
+        $updatePricingPlanRequest = new SubscriptionUpdatePricingPlanRequest();
+        $updatePricingPlanRequest->setLocale($this->config->locale);
+        $updatePricingPlanRequest->setConversationId($this->config->conversationId);
+        $updatePricingPlanRequest->setPricingPlanReferenceCode($planReferenceCode);
+
+        if (isset($updateData['name'])) {
+            $updatePricingPlanRequest->setName((string) $updateData['name']);
+        }
+
+        if (isset($updateData['trialPeriodDays'])) {
+            $updatePricingPlanRequest->setTrialPeriodDays((int) $updateData['trialPeriodDays']);
+        }
+
+        return SubscriptionPricingPlan::update(
+            $updatePricingPlanRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Plan silme
+     */
+    public function delete(string $planReferenceCode)
+    {
+        $deletePricingPlanRequest = new SubscriptionDeletePricingPlanRequest();
+        $deletePricingPlanRequest->setLocale($this->config->locale);
+        $deletePricingPlanRequest->setConversationId($this->config->conversationId);
+        $deletePricingPlanRequest->setPricingPlanReferenceCode($planReferenceCode);
+
+        return SubscriptionPricingPlan::delete(
+            $deletePricingPlanRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 }

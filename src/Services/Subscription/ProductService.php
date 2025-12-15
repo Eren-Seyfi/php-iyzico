@@ -8,7 +8,7 @@ use Eren5\PhpIyzico\OptionsFactory;
 
 // Iyzipay Models & Requests
 use Iyzipay\Model\Subscription\SubscriptionProduct;
-use Iyzipay\Model\Subscription\RetrieveList; // <- LISTELEME İÇİN GEREKLİ
+use Iyzipay\Model\Subscription\RetrieveList;
 use Iyzipay\Request\Subscription\SubscriptionCreateProductRequest;
 use Iyzipay\Request\Subscription\SubscriptionUpdateProductRequest;
 use Iyzipay\Request\Subscription\SubscriptionDeleteProductRequest;
@@ -20,83 +20,107 @@ use Iyzipay\Request\Subscription\SubscriptionListProductsRequest;
  */
 final class ProductService
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
-    /** Ürün oluştur */
-    public function create(string $name, ?string $description = null)
+    /**
+     * Ürün oluşturma
+     */
+    public function create(string $productName, ?string $productDescription = null)
     {
-        $r = new SubscriptionCreateProductRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setName($name);
-        if ($description !== null) {
-            $r->setDescription($description);
+        $createProductRequest = new SubscriptionCreateProductRequest();
+        $createProductRequest->setLocale($this->config->locale);
+        $createProductRequest->setConversationId($this->config->conversationId);
+        $createProductRequest->setName($productName);
+
+        if ($productDescription !== null) {
+            $createProductRequest->setDescription($productDescription);
         }
 
-        return SubscriptionProduct::create($r, OptionsFactory::create($this->cfg));
+        return SubscriptionProduct::create(
+            $createProductRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Ürün getir (referenceCode ile) */
-    public function retrieve(string $productRefCode)
+    /**
+     * Ürün getirme (referenceCode ile)
+     */
+    public function retrieve(string $productReferenceCode)
     {
-        $r = new SubscriptionRetrieveProductRequest();
-        // (SDK örneğinde locale/conversationId zorunlu değil ama eklemek sakıncalı değil)
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setProductReferenceCode($productRefCode);
+        $retrieveProductRequest = new SubscriptionRetrieveProductRequest();
+        $retrieveProductRequest->setLocale($this->config->locale);
+        $retrieveProductRequest->setConversationId($this->config->conversationId);
+        $retrieveProductRequest->setProductReferenceCode($productReferenceCode);
 
-        return SubscriptionProduct::retrieve($r, OptionsFactory::create($this->cfg));
+        return SubscriptionProduct::retrieve(
+            $retrieveProductRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Ürünleri listele (sayfalı) */
+    /**
+     * Ürünleri listeleme
+     */
     public function list(int $page = 1, int $count = 10)
     {
-        $r = new SubscriptionListProductsRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
+        $listProductsRequest = new SubscriptionListProductsRequest();
+        $listProductsRequest->setLocale($this->config->locale);
+        $listProductsRequest->setConversationId($this->config->conversationId);
 
-        // SDK örneği: $request->setPage(1); $request->setCount(10);
-        // Bazı sürümlerde bu setter'lar farklı olabilir; method_exists ile güvence.
-        if (method_exists($r, 'setPage')) {
-            $r->setPage($page);
+        if (method_exists($listProductsRequest, 'setPage')) {
+            $listProductsRequest->setPage($page);
         }
-        if (method_exists($r, 'setCount')) {
-            $r->setCount($count);
+        if (method_exists($listProductsRequest, 'setCount')) {
+            $listProductsRequest->setCount($count);
         }
 
-        // DÜZELTME: SubscriptionProduct::list(...) DEĞİL,
-        // \Iyzipay\Model\Subscription\RetrieveList::products(...) kullanılmalı.
-        return RetrieveList::products($r, OptionsFactory::create($this->cfg));
+        return RetrieveList::products(
+            $listProductsRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Ürün güncelle (ad / açıklama) */
-    public function update(string $productRefCode, ?string $name = null, ?string $description = null)
-    {
-        $r = new SubscriptionUpdateProductRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setProductReferenceCode($productRefCode);
+    /**
+     * Ürün güncelleme (ad / açıklama)
+     */
+    public function update(
+        string $productReferenceCode,
+        ?string $productName = null,
+        ?string $productDescription = null
+    ) {
+        $updateProductRequest = new SubscriptionUpdateProductRequest();
+        $updateProductRequest->setLocale($this->config->locale);
+        $updateProductRequest->setConversationId($this->config->conversationId);
+        $updateProductRequest->setProductReferenceCode($productReferenceCode);
 
-        if ($name !== null) {
-            $r->setName($name);
+        if ($productName !== null) {
+            $updateProductRequest->setName($productName);
         }
-        if ($description !== null) {
-            $r->setDescription($description);
+        if ($productDescription !== null) {
+            $updateProductRequest->setDescription($productDescription);
         }
 
-        return SubscriptionProduct::update($r, OptionsFactory::create($this->cfg));
+        return SubscriptionProduct::update(
+            $updateProductRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
-    /** Ürün sil (plan bağlıysa silinmeyebilir) */
-    public function delete(string $productRefCode)
+    /**
+     * Ürün silme
+     */
+    public function delete(string $productReferenceCode)
     {
-        $r = new SubscriptionDeleteProductRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setProductReferenceCode($productRefCode);
+        $deleteProductRequest = new SubscriptionDeleteProductRequest();
+        $deleteProductRequest->setLocale($this->config->locale);
+        $deleteProductRequest->setConversationId($this->config->conversationId);
+        $deleteProductRequest->setProductReferenceCode($productReferenceCode);
 
-        return SubscriptionProduct::delete($r, OptionsFactory::create($this->cfg));
+        return SubscriptionProduct::delete(
+            $deleteProductRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 }

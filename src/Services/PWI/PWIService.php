@@ -7,7 +7,7 @@ use Eren5\PhpIyzico\Config;
 use Eren5\PhpIyzico\OptionsFactory;
 use Eren5\PhpIyzico\Security\Signature;
 
-// Iyzipay Core/Enums
+// Iyzipay Core
 use Iyzipay\Options;
 use Iyzipay\Model\Locale;
 use Iyzipay\Model\Currency;
@@ -19,18 +19,14 @@ use Iyzipay\Model\Buyer;
 use Iyzipay\Model\Address;
 use Iyzipay\Model\BasketItem;
 
-// Iyzipay Requests & Models (PWI)
+// PWI Requests & Models
 use Iyzipay\Request\CreatePayWithIyzicoInitializeRequest;
 use Iyzipay\Request\RetrievePayWithIyzicoRequest;
 use Iyzipay\Model\PayWithIyzicoInitialize;
 use Iyzipay\Model\PayWithIyzico;
 
 /**
- * Pay with iyzico (PWI) sarmalayıcı servis.
- *
- * - create():   PWI başlatma (token üretir, kullanıcıyı iyzico sayfasına yönlendirirsiniz)
- * - retrieve(): PWI sonucu/ödeme detaylarını token ile çeker
- * - İmza doğrulama: create/retrieve cevapları için Signature sınıfı kullanılır
+ * Pay with iyzico (PWI) yüksek seviyeli servis sarmalayıcı.
  */
 final class PWIService
 {
@@ -40,80 +36,86 @@ final class PWIService
         private Config $config,
         private Signature $signature
     ) {
-        // Senin OptionsFactory'in statik create(Config $cfg): Options
         $this->options = OptionsFactory::create($this->config);
     }
 
     /**
-     * PWI Başlatma (CreatePayWithIyzicoInitialize) — BASİT İSİM: create
-     *
-     * Zorunlu: price, paidPrice, currency, basketId, paymentGroup, callbackUrl,
-     * buyer, shippingAddress, billingAddress, basketItems
-     *
-     * @param array{
-     *   locale?:string,
-     *   conversationId?:string,
-     *   price:float|int|string,
-     *   paidPrice:float|int|string,
-     *   currency:string|int,
-     *   basketId:string,
-     *   paymentGroup:string|int,
-     *   callbackUrl:string,
-     *   enabledInstallments?:int[],
-     *   buyer: array<string,mixed>,
-     *   shippingAddress: array<string,mixed>,
-     *   billingAddress: array<string,mixed>,
-     *   basketItems: array<int,array<string,mixed>>
-     * } $data
-     *
-     * @return array{verified:bool}|array<string,mixed>
+     * PWI Başlatma
      */
-    public function create(array $data): array
+    public function create(array $requestData): array
     {
-        foreach (['price', 'paidPrice', 'currency', 'basketId', 'paymentGroup', 'callbackUrl', 'buyer', 'shippingAddress', 'billingAddress', 'basketItems'] as $f) {
-            if (!array_key_exists($f, $data)) {
-                throw new \InvalidArgumentException("Missing required field: {$f}");
+        // Zorunlu alan kontrolü
+        $requiredFields = [
+            'price',
+            'paidPrice',
+            'currency',
+            'basketId',
+            'paymentGroup',
+            'callbackUrl',
+            'buyer',
+            'shippingAddress',
+            'billingAddress',
+            'basketItems'
+        ];
+
+        foreach ($requiredFields as $fieldName) {
+            if (!array_key_exists($fieldName, $requestData)) {
+                throw new \InvalidArgumentException("Missing required field: {$fieldName}");
             }
         }
 
-        $req = new CreatePayWithIyzicoInitializeRequest();
-        $req->setLocale($data['locale'] ?? Locale::TR);
-        $req->setConversationId($data['conversationId'] ?? (string) microtime(true));
-        $req->setPrice((string) $data['price']);
-        $req->setPaidPrice((string) $data['paidPrice']);
-        $req->setCurrency(is_string($data['currency']) ? Currency::TL : $data['currency']); // string gelirse TRY varsayımı
-        $req->setBasketId((string) $data['basketId']);
-        $req->setPaymentGroup(is_string($data['paymentGroup']) ? PaymentGroup::PRODUCT : $data['paymentGroup']);
-        $req->setCallbackUrl((string) $data['callbackUrl']);
+        $initializeRequest = new CreatePayWithIyzicoInitializeRequest();
+        $initializeRequest->setLocale($requestData['locale'] ?? Locale::TR);
+        $initializeRequest->setConversationId($requestData['conversationId'] ?? (string) microtime(true));
+        $initializeRequest->setPrice((string) $requestData['price']);
+        $initializeRequest->setPaidPrice((string) $requestData['paidPrice']);
 
-        if (!empty($data['enabledInstallments']) && is_array($data['enabledInstallments'])) {
-            $req->setEnabledInstallments(array_values(array_map('intval', $data['enabledInstallments'])));
+        // Eğer currency string gelmişse TRY varsayımı
+        $initializeRequest->setCurrency(
+            is_string($requestData['currency']) ? Currency::TL : $requestData['currency']
+        );
+
+        $initializeRequest->setBasketId((string) $requestData['basketId']);
+
+        // PaymentGroup string gelmişse PRODUCT varsayımı
+        $initializeRequest->setPaymentGroup(
+            is_string($requestData['paymentGroup']) ? PaymentGroup::PRODUCT : $requestData['paymentGroup']
+        );
+
+        $initializeRequest->setCallbackUrl((string) $requestData['callbackUrl']);
+
+        if (!empty($requestData['enabledInstallments'])) {
+            $initializeRequest->setEnabledInstallments(
+                array_map('intval', (array) $requestData['enabledInstallments'])
+            );
         }
 
-        // Buyer / Address / Items
-        $req->setBuyer($this->mapBuyer($data['buyer']));
-        $req->setShippingAddress($this->mapAddress($data['shippingAddress']));
-        $req->setBillingAddress($this->mapAddress($data['billingAddress']));
-        $req->setBasketItems($this->mapBasketItems($data['basketItems']));
+        $initializeRequest->setBuyer($this->mapBuyer($requestData['buyer']));
+        $initializeRequest->setShippingAddress($this->mapAddress($requestData['shippingAddress']));
+        $initializeRequest->setBillingAddress($this->mapAddress($requestData['billingAddress']));
+        $initializeRequest->setBasketItems($this->mapBasketItems($requestData['basketItems']));
 
-        // API çağrısı
-        $res = PayWithIyzicoInitialize::create($req, $this->options);
+        $response = PayWithIyzicoInitialize::create($initializeRequest, $this->options);
 
-        // İmza doğrulama: [conversationId, token]
-        $conversationId = (string) $res->getConversationId();
-        $token = (string) $res->getToken();
-        $sigServer = (string) $res->getSignature();
+        // İmza doğrulama
+        $conversationId = (string) $response->getConversationId();
+        $token = (string) $response->getToken();
+        $serverSignature = (string) $response->getSignature();
 
-        $sigCalc = $this->signature::calculateColonSeparated([$conversationId, $token], (string) $this->options->getSecretKey());
-        $verified = hash_equals($sigServer, $sigCalc);
+        $calculatedSignature = $this->signature::calculateColonSeparated(
+            [$conversationId, $token],
+            (string) $this->options->getSecretKey()
+        );
 
-        return $this->normalize($res) + ['verified' => $verified];
+        $verified = hash_equals($serverSignature, $calculatedSignature);
+
+        return $this->normalizeResponse($response) + [
+            'verified' => $verified
+        ];
     }
 
     /**
-     * @deprecated Eski ad. Yeni adı: create().
-     *             Geriye dönük uyumluluk için bırakıldı.
-     *             Kullandığın yerlerde create(...) ile değiştir.
+     * @deprecated Eski ad. Yeni adı: create()
      */
     public function initialize(array $data): array
     {
@@ -121,116 +123,135 @@ final class PWIService
     }
 
     /**
-     * PWI Sonucu/Ödeme Detayı Getirme (RetrievePayWithIyzico) — BASİT İSİM: retrieve
-     *
-     * @return array{verified:bool}|array<string,mixed>
+     * PWI Sonuç Getirme
      */
     public function retrieve(string $token, ?string $conversationId = null, ?string $locale = null): array
     {
-        $req = new RetrievePayWithIyzicoRequest();
-        $req->setLocale($locale ?? Locale::TR);
-        $req->setConversationId($conversationId ?? (string) microtime(true));
-        $req->setToken($token);
+        $retrieveRequest = new RetrievePayWithIyzicoRequest();
+        $retrieveRequest->setLocale($locale ?? Locale::TR);
+        $retrieveRequest->setConversationId($conversationId ?? (string) microtime(true));
+        $retrieveRequest->setToken($token);
 
-        $res = PayWithIyzico::retrieve($req, $this->options);
+        $response = PayWithIyzico::retrieve($retrieveRequest, $this->options);
 
-        // İmza doğrulama:
-        // [paymentStatus, paymentId, currency, basketId, conversationId, paidPrice, price, token]
-        $sigServer = (string) $res->getSignature();
-        $parts = [
-            (string) $res->getPaymentStatus(),
-            (string) $res->getPaymentId(),
-            (string) $res->getCurrency(),
-            (string) $res->getBasketId(),
-            (string) $res->getConversationId(),
-            (string) $res->getPaidPrice(),
-            (string) $res->getPrice(),
-            (string) $res->getToken(),
+        // İmza doğrulama
+        $serverSignature = (string) $response->getSignature();
+
+        $signatureParts = [
+            (string) $response->getPaymentStatus(),
+            (string) $response->getPaymentId(),
+            (string) $response->getCurrency(),
+            (string) $response->getBasketId(),
+            (string) $response->getConversationId(),
+            (string) $response->getPaidPrice(),
+            (string) $response->getPrice(),
+            (string) $response->getToken(),
         ];
-        $sigCalc = $this->signature::calculateColonSeparated($parts, (string) $this->options->getSecretKey());
-        $verified = hash_equals($sigServer, $sigCalc);
 
-        return $this->normalize($res) + ['verified' => $verified];
+        $calculatedSignature = $this->signature::calculateColonSeparated(
+            $signatureParts,
+            (string) $this->options->getSecretKey()
+        );
+
+        $verified = hash_equals($serverSignature, $calculatedSignature);
+
+        return $this->normalizeResponse($response) + [
+            'verified' => $verified
+        ];
     }
 
-    // -----------------------------
-    // Mapping helpers (yalın & net)
-    // -----------------------------
+    // ---------------------------------------
+    // Model Mapping Helpers
+    // ---------------------------------------
 
-    /** @param array<string,mixed> $src */
-    private function mapBuyer(array $src): Buyer
+    private function mapBuyer(array $buyerData): Buyer
     {
-        $b = new Buyer();
-        isset($src['id']) && $b->setId((string) $src['id']);
-        isset($src['name']) && $b->setName((string) $src['name']);
-        isset($src['surname']) && $b->setSurname((string) $src['surname']);
-        isset($src['gsmNumber']) && $b->setGsmNumber((string) $src['gsmNumber']);
-        isset($src['email']) && $b->setEmail((string) $src['email']);
-        isset($src['identityNumber']) && $b->setIdentityNumber((string) $src['identityNumber']);
-        isset($src['lastLoginDate']) && $b->setLastLoginDate((string) $src['lastLoginDate']);
-        isset($src['registrationDate']) && $b->setRegistrationDate((string) $src['registrationDate']);
-        isset($src['registrationAddress']) && $b->setRegistrationAddress((string) $src['registrationAddress']);
-        isset($src['ip']) && $b->setIp((string) $src['ip']);
-        isset($src['city']) && $b->setCity((string) $src['city']);
-        isset($src['country']) && $b->setCountry((string) $src['country']);
-        isset($src['zipCode']) && $b->setZipCode((string) $src['zipCode']);
-        return $b;
+        $buyerModel = new Buyer();
+
+        isset($buyerData['id']) && $buyerModel->setId((string) $buyerData['id']);
+        isset($buyerData['name']) && $buyerModel->setName((string) $buyerData['name']);
+        isset($buyerData['surname']) && $buyerModel->setSurname((string) $buyerData['surname']);
+        isset($buyerData['gsmNumber']) && $buyerModel->setGsmNumber((string) $buyerData['gsmNumber']);
+        isset($buyerData['email']) && $buyerModel->setEmail((string) $buyerData['email']);
+        isset($buyerData['identityNumber']) && $buyerModel->setIdentityNumber((string) $buyerData['identityNumber']);
+        isset($buyerData['lastLoginDate']) && $buyerModel->setLastLoginDate((string) $buyerData['lastLoginDate']);
+        isset($buyerData['registrationDate']) && $buyerModel->setRegistrationDate((string) $buyerData['registrationDate']);
+        isset($buyerData['registrationAddress']) && $buyerModel->setRegistrationAddress((string) $buyerData['registrationAddress']);
+        isset($buyerData['ip']) && $buyerModel->setIp((string) $buyerData['ip']);
+        isset($buyerData['city']) && $buyerModel->setCity((string) $buyerData['city']);
+        isset($buyerData['country']) && $buyerModel->setCountry((string) $buyerData['country']);
+        isset($buyerData['zipCode']) && $buyerModel->setZipCode((string) $buyerData['zipCode']);
+
+        return $buyerModel;
     }
 
-    /** @param array<string,mixed> $src */
-    private function mapAddress(array $src): Address
+    private function mapAddress(array $addressData): Address
     {
-        $a = new Address();
-        isset($src['contactName']) && $a->setContactName((string) $src['contactName']);
-        isset($src['city']) && $a->setCity((string) $src['city']);
-        isset($src['country']) && $a->setCountry((string) $src['country']);
-        isset($src['address']) && $a->setAddress((string) $src['address']);
-        isset($src['zipCode']) && $a->setZipCode((string) $src['zipCode']);
-        return $a;
+        $addressModel = new Address();
+
+        isset($addressData['contactName']) && $addressModel->setContactName((string) $addressData['contactName']);
+        isset($addressData['city']) && $addressModel->setCity((string) $addressData['city']);
+        isset($addressData['country']) && $addressModel->setCountry((string) $addressData['country']);
+        isset($addressData['address']) && $addressModel->setAddress((string) $addressData['address']);
+        isset($addressData['zipCode']) && $addressModel->setZipCode((string) $addressData['zipCode']);
+
+        return $addressModel;
     }
 
-    /**
-     * @param array<int,array<string,mixed>> $items
-     * @return BasketItem[]
-     */
-    private function mapBasketItems(array $items): array
+    private function mapBasketItems(array $basketItemsData): array
     {
-        $out = [];
-        foreach ($items as $i => $src) {
-            $bi = new BasketItem();
-            isset($src['id']) && $bi->setId((string) $src['id']);
-            isset($src['name']) && $bi->setName((string) $src['name']);
-            isset($src['category1']) && $bi->setCategory1((string) $src['category1']);
-            isset($src['category2']) && $bi->setCategory2((string) $src['category2']);
-            if (isset($src['itemType'])) {
-                $bi->setItemType(is_string($src['itemType']) ? BasketItemType::PHYSICAL : $src['itemType']);
+        $basketItemModels = [];
+
+        foreach ($basketItemsData as $index => $itemData) {
+            $basketItem = new BasketItem();
+
+            isset($itemData['id']) && $basketItem->setId((string) $itemData['id']);
+            isset($itemData['name']) && $basketItem->setName((string) $itemData['name']);
+            isset($itemData['category1']) && $basketItem->setCategory1((string) $itemData['category1']);
+            isset($itemData['category2']) && $basketItem->setCategory2((string) $itemData['category2']);
+
+            if (isset($itemData['itemType'])) {
+                $basketItem->setItemType(
+                    is_string($itemData['itemType'])
+                    ? BasketItemType::PHYSICAL
+                    : $itemData['itemType']
+                );
             }
-            isset($src['price']) && $bi->setPrice((string) $src['price']);
-            $out[$i] = $bi;
+
+            isset($itemData['price']) && $basketItem->setPrice((string) $itemData['price']);
+
+            $basketItemModels[$index] = $basketItem;
         }
-        return array_values($out);
+
+        return array_values($basketItemModels);
     }
 
-    /** SDK cevabını diziye normalleştirir. */
-    private function normalize(object $sdkResponse): array
+    // ---------------------------------------
+    // Normalize Helpers
+    // ---------------------------------------
+
+    private function normalizeResponse(object $response): array
     {
-        if (method_exists($sdkResponse, 'getRawResult')) {
-            $raw = $sdkResponse->getRawResult();
-            if (is_string($raw) && $raw !== '') {
-                $arr = json_decode($raw, true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($arr)) {
-                    return $arr;
+        if (method_exists($response, 'getRawResult')) {
+            $rawJson = $response->getRawResult();
+            if (is_string($rawJson) && $rawJson !== '') {
+                $decoded = json_decode($rawJson, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    return $decoded;
                 }
-                return ['rawResult' => $raw];
+                return ['rawResult' => $rawJson];
             }
         }
-        $json = json_encode($sdkResponse, JSON_UNESCAPED_UNICODE);
+
+        $json = json_encode($response, JSON_UNESCAPED_UNICODE);
+
         if ($json !== false) {
-            $arr = json_decode($json, true);
-            if (is_array($arr)) {
-                return $arr;
+            $decoded = json_decode($json, true);
+            if (is_array($decoded)) {
+                return $decoded;
             }
         }
-        return ['result' => (string) print_r($sdkResponse, true)];
+
+        return ['result' => print_r($response, true)];
     }
 }

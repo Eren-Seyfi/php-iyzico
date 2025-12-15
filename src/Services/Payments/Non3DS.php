@@ -19,145 +19,177 @@ use Iyzipay\Request\RetrievePaymentRequest;
 
 final class Non3DS
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
-     * Non3D ödeme oluştur.
+     * Non-3D ödeme oluşturma.
      *
      * @param array{
      *   price:numeric-string|int|float,
      *   paidPrice?:numeric-string|int|float,
-     *   currency?:string,                // Iyzipay\Model\Currency::TL|USD|EUR ...
-     *   installment?:int,                // 1..12
+     *   currency?:string,
+     *   installment?:int,
      *   basketId?:string,
      *   locale?:string,
      *   conversationId?:string,
-     *   paymentChannel?:string,          // Iyzipay\Model\PaymentChannel::WEB ...
-     *   paymentGroup?:string             // Iyzipay\Model\PaymentGroup::PRODUCT ...
-     * } $order
-     * @param PaymentCard $card
-     * @param array<string,mixed> $buyer
-     * @param array<string,mixed> $shipAddress
-     * @param array<string,mixed> $billAddress
-     * @param array<int,array<string,mixed>> $basketItems
+     *   paymentChannel?:string,
+     *   paymentGroup?:string
+     * } $orderData
+     *
+     * @param PaymentCard $paymentCard
+     * @param array<string,mixed> $buyerData
+     * @param array<string,mixed> $shippingAddressData
+     * @param array<string,mixed> $billingAddressData
+     * @param array<int,array<string,mixed>> $basketItemsData
      */
-    public function pay(
-        array $order,
-        PaymentCard $card,
-        array $buyer,
-        array $shipAddress,
-        array $billAddress,
-        array $basketItems
+    public function createPayment(
+        array $orderData,
+        PaymentCard $paymentCard,
+        array $buyerData,
+        array $shippingAddressData,
+        array $billingAddressData,
+        array $basketItemsData
     ): Payment {
-        $r = new CreatePaymentRequest();
-        $r->setLocale($order['locale'] ?? $this->cfg->locale);
-        $r->setConversationId($order['conversationId'] ?? $this->cfg->conversationId);
+        $request = new CreatePaymentRequest();
+
+        $request->setLocale($orderData['locale'] ?? $this->config->locale);
+        $request->setConversationId($orderData['conversationId'] ?? $this->config->conversationId);
 
         // Zorunlular
-        $r->setPrice((string) $order['price']);
-        $r->setPaidPrice((string) ($order['paidPrice'] ?? $order['price']));
-        $r->setCurrency($order['currency'] ?? Currency::TL);
-        $r->setInstallment((int) ($order['installment'] ?? 1));
+        $request->setPrice((string) $orderData['price']);
+        $request->setPaidPrice((string) ($orderData['paidPrice'] ?? $orderData['price']));
+        $request->setCurrency($orderData['currency'] ?? Currency::TL);
+        $request->setInstallment((int) ($orderData['installment'] ?? 1));
 
         // Opsiyoneller
-        if (!empty($order['basketId'])) {
-            $r->setBasketId((string) $order['basketId']);
+        if (!empty($orderData['basketId'])) {
+            $request->setBasketId((string) $orderData['basketId']);
         }
-        $r->setPaymentChannel($order['paymentChannel'] ?? PaymentChannel::WEB);
-        $r->setPaymentGroup($order['paymentGroup'] ?? PaymentGroup::PRODUCT);
 
-        // Parçalar
-        $r->setPaymentCard($card);
-        $r->setBuyer(Helpers::buyer($buyer));
-        $r->setShippingAddress(Helpers::address($shipAddress));
-        $r->setBillingAddress(Helpers::address($billAddress));
+        $request->setPaymentChannel($orderData['paymentChannel'] ?? PaymentChannel::WEB);
+        $request->setPaymentGroup($orderData['paymentGroup'] ?? PaymentGroup::PRODUCT);
 
-        $items = [];
-        foreach ($basketItems as $it) {
-            $items[] = Helpers::basketItem($it);
+        // Buyer – Card – Address – Items
+        $request->setPaymentCard($paymentCard);
+        $request->setBuyer(Helpers::buyer($buyerData));
+        $request->setShippingAddress(Helpers::address($shippingAddressData));
+        $request->setBillingAddress(Helpers::address($billingAddressData));
+
+        $basketItems = [];
+        foreach ($basketItemsData as $itemData) {
+            $basketItems[] = Helpers::basketItem($itemData);
         }
-        $r->setBasketItems($items);
+        $request->setBasketItems($basketItems);
 
-        return Payment::create($r, OptionsFactory::create($this->cfg));
+        return Payment::create($request, OptionsFactory::create($this->config));
     }
 
     /**
-     * Ödeme + imza doğrulama (dokümandaki sırayla).
-     * @return array{payment: Payment, verified: bool, calculated: string}
+     * Non3DS Payment + Signature Verification (dokümandaki sırayla)
+     *
+     * @return array{
+     *   payment: Payment,
+     *   verified: bool,
+     *   calculatedSignature: string
+     * }
      */
-    public function payAndVerify(
-        array $order,
-        PaymentCard $card,
-        array $buyer,
-        array $shipAddress,
-        array $billAddress,
-        array $basketItems
+    public function createPaymentAndVerify(
+        array $orderData,
+        PaymentCard $paymentCard,
+        array $buyerData,
+        array $shippingAddressData,
+        array $billingAddressData,
+        array $basketItemsData
     ): array {
-        $opt = OptionsFactory::create($this->cfg);
-        $payment = $this->pay($order, $card, $buyer, $shipAddress, $billAddress, $basketItems);
+        $options = OptionsFactory::create($this->config);
+        $paymentResult = $this->createPayment(
+            $orderData,
+            $paymentCard,
+            $buyerData,
+            $shippingAddressData,
+            $billingAddressData,
+            $basketItemsData
+        );
 
-        $params = [
-            (string) $payment->getPaymentId(),
-            (string) $payment->getCurrency(),
-            (string) $payment->getBasketId(),
-            (string) $payment->getConversationId(),
-            (string) $payment->getPaidPrice(),
-            (string) $payment->getPrice(),
+        // Doküman imza sırası
+        $partsToSign = [
+            (string) $paymentResult->getPaymentId(),
+            (string) $paymentResult->getCurrency(),
+            (string) $paymentResult->getBasketId(),
+            (string) $paymentResult->getConversationId(),
+            (string) $paymentResult->getPaidPrice(),
+            (string) $paymentResult->getPrice(),
         ];
-        $calc = Signature::calculate($params, (string) $opt->getSecretKey());
-        $verified = ((string) $payment->getSignature() === $calc);
 
-        return ['payment' => $payment, 'verified' => $verified, 'calculated' => $calc];
+        $calculatedSignature = Signature::calculate($partsToSign, (string) $options->getSecretKey());
+        $verified = ((string) $paymentResult->getSignature() === $calculatedSignature);
+
+        return [
+            'payment' => $paymentResult,
+            'verified' => $verified,
+            'calculatedSignature' => $calculatedSignature
+        ];
     }
 
     /**
-     * Ödeme sorgulama (Retrieve Payment Result).
+     * Ödeme sorgulama (RetrievePayment)
      *
      * @param array{
      *   paymentId?:string,
      *   paymentConversationId?:string,
      *   locale?:string,
      *   conversationId?:string
-     * } $query
+     * } $queryData
      */
-    public function retrieve(array $query): Payment
+    public function retrievePayment(array $queryData): Payment
     {
-        $r = new RetrievePaymentRequest();
-        $r->setLocale($query['locale'] ?? $this->cfg->locale);
-        $r->setConversationId($query['conversationId'] ?? $this->cfg->conversationId);
+        $request = new RetrievePaymentRequest();
 
-        if (!empty($query['paymentId'])) {
-            $r->setPaymentId((string) $query['paymentId']);
+        $request->setLocale($queryData['locale'] ?? $this->config->locale);
+        $request->setConversationId($queryData['conversationId'] ?? $this->config->conversationId);
+
+        if (!empty($queryData['paymentId'])) {
+            $request->setPaymentId((string) $queryData['paymentId']);
         }
-        if (!empty($query['paymentConversationId'])) {
-            $r->setPaymentConversationId((string) $query['paymentConversationId']);
+        if (!empty($queryData['paymentConversationId'])) {
+            $request->setPaymentConversationId((string) $queryData['paymentConversationId']);
         }
 
-        return Payment::retrieve($r, OptionsFactory::create($this->cfg));
+        return Payment::retrieve($request, OptionsFactory::create($this->config));
     }
 
     /**
-     * Ödeme sorgulama + imza doğrulama.
-     * @return array{payment: Payment, verified: bool, calculated: string}
+     * Retrieve + Signature Verification
+     *
+     * @return array{
+     *   payment: Payment,
+     *   verified: bool,
+     *   calculatedSignature: string
+     * }
      */
-    public function retrieveAndVerify(array $query): array
+    public function retrievePaymentAndVerify(array $queryData): array
     {
-        $opt = OptionsFactory::create($this->cfg);
-        $payment = $this->retrieve($query);
+        $options = OptionsFactory::create($this->config);
+        $paymentResult = $this->retrievePayment($queryData);
 
-        $params = [
-            (string) $payment->getPaymentId(),
-            (string) $payment->getCurrency(),
-            (string) $payment->getBasketId(),
-            (string) $payment->getConversationId(),
-            (string) $payment->getPaidPrice(),
-            (string) $payment->getPrice(),
+        $partsToSign = [
+            (string) $paymentResult->getPaymentId(),
+            (string) $paymentResult->getCurrency(),
+            (string) $paymentResult->getBasketId(),
+            (string) $paymentResult->getConversationId(),
+            (string) $paymentResult->getPaidPrice(),
+            (string) $paymentResult->getPrice(),
         ];
-        $calc = Signature::calculate($params, (string) $opt->getSecretKey());
-        $verified = ((string) $payment->getSignature() === $calc);
 
-        return ['payment' => $payment, 'verified' => $verified, 'calculated' => $calc];
+        $calculatedSignature = Signature::calculate($partsToSign, (string) $options->getSecretKey());
+        $verified = ((string) $paymentResult->getSignature() === $calculatedSignature);
+
+        return [
+            'payment' => $paymentResult,
+            'verified' => $verified,
+            'calculatedSignature' => $calculatedSignature
+        ];
     }
 }

@@ -11,7 +11,7 @@ use InvalidArgumentException;
 
 final class BinService
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
@@ -19,36 +19,40 @@ final class BinService
      * BIN numarasını (ilk 6-8 hane) sorgular.
      *
      * @param  string $binNumber  En az 6, en fazla 8 haneli numerik BIN.
-     * @return BinNumber
-     *
-     * @throws InvalidArgumentException
      */
     public function check(string $binNumber): BinNumber
     {
-        $bin = $this->normalizeBin($binNumber);
+        $normalizedBinNumber = $this->normalizeBinNumber($binNumber);
 
-        $req = new RetrieveBinNumberRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
-        $req->setBinNumber($bin);
+        $retrieveBinNumberRequest = new RetrieveBinNumberRequest();
+        $retrieveBinNumberRequest->setLocale($this->config->locale);
+        $retrieveBinNumberRequest->setConversationId($this->config->conversationId);
+        $retrieveBinNumberRequest->setBinNumber($normalizedBinNumber);
 
-        return BinNumber::retrieve($req, OptionsFactory::create($this->cfg));
+        return BinNumber::retrieve(
+            $retrieveBinNumberRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * Yalnızca basit bir doğrulama ve trim/cleanup yapar.
+     * Basit temizlik ve doğrulama.
      */
-    private function normalizeBin(string $bin): string
+    private function normalizeBinNumber(string $binNumber): string
     {
-        $bin = preg_replace('/\D+/', '', $bin ?? '');
-        if ($bin === null) {
-            $bin = '';
+        // Sadece rakamları al
+        $filteredNumber = preg_replace('/\D+/', '', $binNumber ?? '');
+
+        if ($filteredNumber === null) {
+            $filteredNumber = '';
         }
 
-        // Iyzico örneklerinde 6 hane kullanılır; bazı bankalarda 7–8 hane görülebilir.
-        if (strlen($bin) < 6 || strlen($bin) > 8) {
+        $length = strlen($filteredNumber);
+
+        if ($length < 6 || $length > 8) {
             throw new InvalidArgumentException('BIN numarası 6-8 haneli olmalıdır.');
         }
-        return $bin;
+
+        return $filteredNumber;
     }
 }

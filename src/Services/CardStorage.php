@@ -24,123 +24,81 @@ use InvalidArgumentException;
 
 final class CardStorage
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
-     * SDK: create_user_and_add_card
-     *
-     * Verilen email + externalId ile kart kullanıcısı oluşturur ve ilk kartı ekler.
-     *
-     * @param string $email
-     * @param string $externalId
-     * @param array{
-     *   cardAlias?:string,
-     *   holderName?:string,
-     *   number?:string,
-     *   expireMonth?:string,
-     *   expireYear?:string
-     * } $cardInfo
+     * Kullanıcı oluşturup ilk kartı ekler (create_user_and_add_card)
      */
-    public function createUserAndAddCard(string $email, string $externalId, array $cardInfo): Card
+    public function createUserAndAddCard(string $email, string $externalId, array $cardInformation): Card
     {
         $email = $this->requireNonEmpty($email, 'email');
         $externalId = $this->requireNonEmpty($externalId, 'externalId');
 
-        $r = new CreateCardRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setEmail($email);
-        $r->setExternalId($externalId);
-        $r->setCard($this->buildCardInformation($cardInfo));
+        $createCardRequest = new CreateCardRequest();
+        $createCardRequest->setLocale($this->config->locale);
+        $createCardRequest->setConversationId($this->config->conversationId);
+        $createCardRequest->setEmail($email);
+        $createCardRequest->setExternalId($externalId);
+        $createCardRequest->setCard($this->buildCardInformation($cardInformation));
 
-        return Card::create($r, OptionsFactory::create($this->cfg));
+        return Card::create($createCardRequest, OptionsFactory::create($this->config));
     }
 
     /**
-     * SDK: create_card
-     *
-     * Var olan bir kart kullanıcısına (cardUserKey) yeni kart ekler.
-     *
-     * @param string $cardUserKey
-     * @param array{
-     *   cardAlias?:string,
-     *   holderName?:string,
-     *   number?:string,
-     *   expireMonth?:string,
-     *   expireYear?:string
-     * } $cardInfo
+     * Var olan kullanıcıya yeni kart ekler.
      */
-    public function addCard(string $cardUserKey, array $cardInfo): Card
+    public function addCard(string $cardUserKey, array $cardInformation): Card
     {
         $cardUserKey = $this->requireNonEmpty($cardUserKey, 'cardUserKey');
 
-        $r = new CreateCardRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setCardUserKey($cardUserKey);
-        $r->setCard($this->buildCardInformation($cardInfo));
+        $createCardRequest = new CreateCardRequest();
+        $createCardRequest->setLocale($this->config->locale);
+        $createCardRequest->setConversationId($this->config->conversationId);
+        $createCardRequest->setCardUserKey($cardUserKey);
+        $createCardRequest->setCard($this->buildCardInformation($cardInformation));
 
-        return Card::create($r, OptionsFactory::create($this->cfg));
+        return Card::create($createCardRequest, OptionsFactory::create($this->config));
     }
 
     /**
-     * SDK: RetrieveCardListRequest
+     * Kart listesini döndürür.
      */
     public function list(string $cardUserKey): CardList
     {
         $cardUserKey = $this->requireNonEmpty($cardUserKey, 'cardUserKey');
 
-        $r = new RetrieveCardListRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setCardUserKey($cardUserKey);
+        $retrieveCardListRequest = new RetrieveCardListRequest();
+        $retrieveCardListRequest->setLocale($this->config->locale);
+        $retrieveCardListRequest->setConversationId($this->config->conversationId);
+        $retrieveCardListRequest->setCardUserKey($cardUserKey);
 
-        return CardList::retrieve($r, OptionsFactory::create($this->cfg));
+        return CardList::retrieve($retrieveCardListRequest, OptionsFactory::create($this->config));
     }
 
     /**
-     * SDK: DeleteCardRequest
+     * Kartı siler.
      */
     public function delete(string $cardUserKey, string $cardToken): Card
     {
         $cardUserKey = $this->requireNonEmpty($cardUserKey, 'cardUserKey');
         $cardToken = $this->requireNonEmpty($cardToken, 'cardToken');
 
-        $r = new DeleteCardRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
-        $r->setCardUserKey($cardUserKey);
-        $r->setCardToken($cardToken);
+        $deleteCardRequest = new DeleteCardRequest();
+        $deleteCardRequest->setLocale($this->config->locale);
+        $deleteCardRequest->setConversationId($this->config->conversationId);
+        $deleteCardRequest->setCardUserKey($cardUserKey);
+        $deleteCardRequest->setCardToken($cardToken);
 
-        return Card::delete($r, OptionsFactory::create($this->cfg));
+        return Card::delete($deleteCardRequest, OptionsFactory::create($this->config));
     }
 
     /**
-     * SDK: "Saklı Kart ile Ödeme Alma (NON3D)" örneğinin servis hâli.
-     *
-     * @param array $payload
-     *   price            string|int|float  -> Örn: "1"
-     *   paidPrice        string|int|float  -> Örn: "1.2"
-     *   currency         string            -> Currency::TL varsayılan
-     *   installment      int               -> Örn: 1
-     *   basketId         string            -> Örn: "B67832"
-     *   paymentChannel   string            -> PaymentChannel::WEB (varsayılan)
-     *   paymentGroup     string            -> PaymentGroup::PRODUCT (varsayılan)
-     *   cardUserKey      string            -> ZORUNLU
-     *   cardToken        string            -> ZORUNLU
-     *   buyer            array{ id:string, name:string, surname:string, gsmNumber?:string, email:string,
-     *                           identityNumber?:string, lastLoginDate?:string, registrationDate?:string,
-     *                           registrationAddress:string, ip:string, city:string, country:string, zipCode?:string }
-     *   shippingAddress  array{ contactName:string, city:string, country:string, address:string, zipCode?:string }
-     *   billingAddress   array{ contactName:string, city:string, country:string, address:string, zipCode?:string }
-     *   basketItems      array<array{ id:string, name:string, category1:string, category2?:string,
-     *                                 itemType:string, price:string|int|float }>
+     * Saklı kart ile NON-3D ödeme alma
      */
     public function payWithSavedCardNon3D(array $payload): Payment
     {
-        // Zorunlular
         $cardUserKey = $this->requireNonEmpty((string) ($payload['cardUserKey'] ?? ''), 'cardUserKey');
         $cardToken = $this->requireNonEmpty((string) ($payload['cardToken'] ?? ''), 'cardToken');
         $basketId = $this->requireNonEmpty((string) ($payload['basketId'] ?? ''), 'basketId');
@@ -153,197 +111,183 @@ final class CardStorage
         $paymentChannel = (string) ($payload['paymentChannel'] ?? PaymentChannel::WEB);
         $paymentGroup = (string) ($payload['paymentGroup'] ?? PaymentGroup::PRODUCT);
 
-        // Buyer / Address / Basket
         $buyer = $this->buildBuyer($payload['buyer'] ?? []);
         $shippingAddress = $this->buildAddress($payload['shippingAddress'] ?? [], 'shippingAddress');
         $billingAddress = $this->buildAddress($payload['billingAddress'] ?? [], 'billingAddress');
         $basketItems = $this->buildBasketItems($payload['basketItems'] ?? []);
 
-        $req = new CreatePaymentRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
-        $req->setPrice($price);
-        $req->setPaidPrice($paidPrice);
-        $req->setCurrency($currency);
-        $req->setInstallment($installment);
-        $req->setBasketId($basketId);
-        $req->setPaymentChannel($paymentChannel);
-        $req->setPaymentGroup($paymentGroup);
+        $createPaymentRequest = new CreatePaymentRequest();
+        $createPaymentRequest->setLocale($this->config->locale);
+        $createPaymentRequest->setConversationId($this->config->conversationId);
+        $createPaymentRequest->setPrice($price);
+        $createPaymentRequest->setPaidPrice($paidPrice);
+        $createPaymentRequest->setCurrency($currency);
+        $createPaymentRequest->setInstallment($installment);
+        $createPaymentRequest->setBasketId($basketId);
+        $createPaymentRequest->setPaymentChannel($paymentChannel);
+        $createPaymentRequest->setPaymentGroup($paymentGroup);
 
-        // Saved card bilgisi
         $paymentCard = new \Iyzipay\Model\PaymentCard();
         $paymentCard->setCardUserKey($cardUserKey);
         $paymentCard->setCardToken($cardToken);
-        $req->setPaymentCard($paymentCard);
+        $createPaymentRequest->setPaymentCard($paymentCard);
 
-        // Buyer / Addresses / Basket
-        $req->setBuyer($buyer);
-        $req->setShippingAddress($shippingAddress);
-        $req->setBillingAddress($billingAddress);
-        $req->setBasketItems($basketItems);
+        $createPaymentRequest->setBuyer($buyer);
+        $createPaymentRequest->setShippingAddress($shippingAddress);
+        $createPaymentRequest->setBillingAddress($billingAddress);
+        $createPaymentRequest->setBasketItems($basketItems);
 
-        return Payment::create($req, OptionsFactory::create($this->cfg));
+        return Payment::create($createPaymentRequest, OptionsFactory::create($this->config));
     }
 
     // --------------------------------------------------------------------
-    // Builders & Validators
+    // Builders
     // --------------------------------------------------------------------
 
-    /**
-     * CardInformation builder (CVC dahil edilmez)
-     *
-     * @param array{
-     *   cardAlias?:string,
-     *   holderName?:string,
-     *   number?:string,
-     *   expireMonth?:string,
-     *   expireYear?:string
-     * } $cardInfo
-     */
-    private function buildCardInformation(array $cardInfo): CardInformation
+    private function buildCardInformation(array $cardInformation): CardInformation
     {
-        $ci = new CardInformation();
+        $cardInfoModel = new CardInformation();
 
-        if (!empty($cardInfo['cardAlias'])) {
-            $ci->setCardAlias((string) $cardInfo['cardAlias']);
+        if (!empty($cardInformation['cardAlias'])) {
+            $cardInfoModel->setCardAlias((string) $cardInformation['cardAlias']);
         }
-        if (!empty($cardInfo['holderName'])) {
-            $ci->setCardHolderName((string) $cardInfo['holderName']);
+        if (!empty($cardInformation['holderName'])) {
+            $cardInfoModel->setCardHolderName((string) $cardInformation['holderName']);
         }
-        if (!empty($cardInfo['number'])) {
-            $this->assertOnlyDigits($cardInfo['number'], 'card number');
-            $ci->setCardNumber((string) $cardInfo['number']);
+        if (!empty($cardInformation['number'])) {
+            $this->assertOnlyDigits($cardInformation['number'], 'card number');
+            $cardInfoModel->setCardNumber((string) $cardInformation['number']);
         }
-        if (!empty($cardInfo['expireMonth'])) {
-            $ci->setExpireMonth((string) $cardInfo['expireMonth']);
+        if (!empty($cardInformation['expireMonth'])) {
+            $cardInfoModel->setExpireMonth((string) $cardInformation['expireMonth']);
         }
-        if (!empty($cardInfo['expireYear'])) {
-            $ci->setExpireYear((string) $cardInfo['expireYear']);
+        if (!empty($cardInformation['expireYear'])) {
+            $cardInfoModel->setExpireYear((string) $cardInformation['expireYear']);
         }
 
-        return $ci;
+        return $cardInfoModel;
     }
 
-    /**
-     * Buyer builder
-     *
-     * @param array $data
-     */
-    private function buildBuyer(array $data): Buyer
+    private function buildBuyer(array $buyerData): Buyer
     {
-        $buyer = new Buyer();
-        $buyer->setId($this->requireNonEmpty((string) ($data['id'] ?? ''), 'buyer.id'));
-        $buyer->setName($this->requireNonEmpty((string) ($data['name'] ?? ''), 'buyer.name'));
-        $buyer->setSurname($this->requireNonEmpty((string) ($data['surname'] ?? ''), 'buyer.surname'));
-        $buyer->setEmail($this->requireNonEmpty((string) ($data['email'] ?? ''), 'buyer.email'));
-        $buyer->setRegistrationAddress($this->requireNonEmpty((string) ($data['registrationAddress'] ?? ''), 'buyer.registrationAddress'));
-        $buyer->setIp($this->requireNonEmpty((string) ($data['ip'] ?? ''), 'buyer.ip'));
-        $buyer->setCity($this->requireNonEmpty((string) ($data['city'] ?? ''), 'buyer.city'));
-        $buyer->setCountry($this->requireNonEmpty((string) ($data['country'] ?? ''), 'buyer.country'));
+        $buyerModel = new Buyer();
 
-        if (!empty($data['gsmNumber']))
-            $buyer->setGsmNumber((string) $data['gsmNumber']);
-        if (!empty($data['identityNumber']))
-            $buyer->setIdentityNumber((string) $data['identityNumber']);
-        if (!empty($data['lastLoginDate']))
-            $buyer->setLastLoginDate((string) $data['lastLoginDate']);
-        if (!empty($data['registrationDate']))
-            $buyer->setRegistrationDate((string) $data['registrationDate']);
-        if (!empty($data['zipCode']))
-            $buyer->setZipCode((string) $data['zipCode']);
+        $buyerModel->setId($this->requireNonEmpty((string) ($buyerData['id'] ?? ''), 'buyer.id'));
+        $buyerModel->setName($this->requireNonEmpty((string) ($buyerData['name'] ?? ''), 'buyer.name'));
+        $buyerModel->setSurname($this->requireNonEmpty((string) ($buyerData['surname'] ?? ''), 'buyer.surname'));
+        $buyerModel->setEmail($this->requireNonEmpty((string) ($buyerData['email'] ?? ''), 'buyer.email'));
+        $buyerModel->setRegistrationAddress($this->requireNonEmpty((string) ($buyerData['registrationAddress'] ?? ''), 'buyer.registrationAddress'));
+        $buyerModel->setIp($this->requireNonEmpty((string) ($buyerData['ip'] ?? ''), 'buyer.ip'));
+        $buyerModel->setCity($this->requireNonEmpty((string) ($buyerData['city'] ?? ''), 'buyer.city'));
+        $buyerModel->setCountry($this->requireNonEmpty((string) ($buyerData['country'] ?? ''), 'buyer.country'));
 
-        return $buyer;
+        if (!empty($buyerData['gsmNumber'])) {
+            $buyerModel->setGsmNumber((string) $buyerData['gsmNumber']);
+        }
+        if (!empty($buyerData['identityNumber'])) {
+            $buyerModel->setIdentityNumber((string) $buyerData['identityNumber']);
+        }
+        if (!empty($buyerData['lastLoginDate'])) {
+            $buyerModel->setLastLoginDate((string) $buyerData['lastLoginDate']);
+        }
+        if (!empty($buyerData['registrationDate'])) {
+            $buyerModel->setRegistrationDate((string) $buyerData['registrationDate']);
+        }
+        if (!empty($buyerData['zipCode'])) {
+            $buyerModel->setZipCode((string) $buyerData['zipCode']);
+        }
+
+        return $buyerModel;
     }
 
-    /**
-     * Address builder
-     *
-     * @param array $data
-     * @param string $fieldPath
-     */
-    private function buildAddress(array $data, string $fieldPath): Address
+    private function buildAddress(array $addressData, string $fieldPath): Address
     {
-        $addr = new Address();
-        $addr->setContactName($this->requireNonEmpty((string) ($data['contactName'] ?? ''), $fieldPath . '.contactName'));
-        $addr->setCity($this->requireNonEmpty((string) ($data['city'] ?? ''), $fieldPath . '.city'));
-        $addr->setCountry($this->requireNonEmpty((string) ($data['country'] ?? ''), $fieldPath . '.country'));
-        $addr->setAddress($this->requireNonEmpty((string) ($data['address'] ?? ''), $fieldPath . '.address'));
-        if (!empty($data['zipCode']))
-            $addr->setZipCode((string) $data['zipCode']);
-        return $addr;
+        $addressModel = new Address();
+
+        $addressModel->setContactName($this->requireNonEmpty((string) ($addressData['contactName'] ?? ''), "$fieldPath.contactName"));
+        $addressModel->setCity($this->requireNonEmpty((string) ($addressData['city'] ?? ''), "$fieldPath.city"));
+        $addressModel->setCountry($this->requireNonEmpty((string) ($addressData['country'] ?? ''), "$fieldPath.country"));
+        $addressModel->setAddress($this->requireNonEmpty((string) ($addressData['address'] ?? ''), "$fieldPath.address"));
+
+        if (!empty($addressData['zipCode'])) {
+            $addressModel->setZipCode((string) $addressData['zipCode']);
+        }
+
+        return $addressModel;
     }
 
-    /**
-     * Basket items builder
-     *
-     * @param array<int, array{
-     *   id:string, name:string, category1:string, category2?:string,
-     *   itemType:string, price:string|int|float
-     * }> $items
-     * @return BasketItem[]
-     */
-    private function buildBasketItems(array $items): array
+    private function buildBasketItems(array $basketItems): array
     {
-        if (empty($items)) {
+        if (empty($basketItems)) {
             throw new InvalidArgumentException('basketItems boş olamaz.');
         }
-        $out = [];
-        foreach ($items as $i => $row) {
-            $bi = new BasketItem();
-            $bi->setId($this->requireNonEmpty((string) ($row['id'] ?? ''), "basketItems[$i].id"));
-            $bi->setName($this->requireNonEmpty((string) ($row['name'] ?? ''), "basketItems[$i].name"));
-            $bi->setCategory1($this->requireNonEmpty((string) ($row['category1'] ?? ''), "basketItems[$i].category1"));
-            if (!empty($row['category2']))
-                $bi->setCategory2((string) $row['category2']);
 
-            $itemType = strtoupper((string) ($row['itemType'] ?? ''));
-            if ($itemType !== BasketItemType::PHYSICAL && $itemType !== BasketItemType::VIRTUAL) {
-                throw new InvalidArgumentException("basketItems[$i].itemType PHYSICAL veya VIRTUAL olmalıdır.");
+        $basketItemModels = [];
+
+        foreach ($basketItems as $index => $basketItemData) {
+            $basketItemModel = new BasketItem();
+
+            $basketItemModel->setId($this->requireNonEmpty((string) ($basketItemData['id'] ?? ''), "basketItems[$index].id"));
+            $basketItemModel->setName($this->requireNonEmpty((string) ($basketItemData['name'] ?? ''), "basketItems[$index].name"));
+            $basketItemModel->setCategory1($this->requireNonEmpty((string) ($basketItemData['category1'] ?? ''), "basketItems[$index].category1"));
+
+            if (!empty($basketItemData['category2'])) {
+                $basketItemModel->setCategory2((string) $basketItemData['category2']);
             }
-            $bi->setItemType($itemType);
 
-            $price = $this->normalizeAmount($row['price'] ?? null, "basketItems[$i].price");
-            $bi->setPrice($price);
-            $out[] = $bi;
+            $itemType = strtoupper((string) ($basketItemData['itemType'] ?? ''));
+
+            if (!in_array($itemType, [BasketItemType::PHYSICAL, BasketItemType::VIRTUAL], true)) {
+                throw new InvalidArgumentException("basketItems[$index].itemType PHYSICAL veya VIRTUAL olmalıdır.");
+            }
+
+            $basketItemModel->setItemType($itemType);
+
+            $normalizedPrice = $this->normalizeAmount($basketItemData['price'] ?? null, "basketItems[$index].price");
+            $basketItemModel->setPrice($normalizedPrice);
+
+            $basketItemModels[] = $basketItemModel;
         }
-        return $out;
+
+        return $basketItemModels;
     }
 
-    // ----------------- helpers -----------------
+    // ----------------- Helpers -----------------
 
-    private function requireNonEmpty(?string $val, string $field): string
+    private function requireNonEmpty(?string $value, string $fieldName): string
     {
-        $val = trim((string) $val);
-        if ($val === '') {
-            throw new InvalidArgumentException("$field boş olamaz.");
+        $trimmed = trim((string) $value);
+
+        if ($trimmed === '') {
+            throw new InvalidArgumentException("$fieldName boş olamaz.");
         }
-        return $val;
+
+        return $trimmed;
     }
 
-    /**
-     * Iyzico string fiyat kabul eder — “100.00” formatına normalize eder.
-     *
-     * @param mixed $amount
-     */
-    private function normalizeAmount(mixed $amount, string $field): string
+    private function normalizeAmount(mixed $amount, string $fieldName): string
     {
         if ($amount === null || $amount === '') {
-            throw new InvalidArgumentException("$field zorunludur.");
+            throw new InvalidArgumentException("$fieldName zorunludur.");
         }
+
         if (is_string($amount)) {
             $amount = str_replace(',', '.', trim($amount));
         }
-        $num = (float) $amount;
-        if ($num <= 0) {
-            throw new InvalidArgumentException("$field 0’dan büyük olmalıdır.");
+
+        $numericAmount = (float) $amount;
+
+        if ($numericAmount <= 0) {
+            throw new InvalidArgumentException("$fieldName 0’dan büyük olmalıdır.");
         }
-        return number_format($num, 2, '.', '');
+
+        return number_format($numericAmount, 2, '.', '');
     }
 
-    private function assertOnlyDigits(string $val, string $fieldLabel): void
+    private function assertOnlyDigits(string $value, string $label): void
     {
-        if (!preg_match('/^\d+$/', $val)) {
-            throw new InvalidArgumentException("$fieldLabel yalnızca rakam içermelidir.");
+        if (!preg_match('/^\d+$/', $value)) {
+            throw new InvalidArgumentException("$label yalnızca rakam içermelidir.");
         }
     }
 }

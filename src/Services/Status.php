@@ -11,41 +11,47 @@ use InvalidArgumentException;
 
 final class Status
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
      * Ödeme detayını getirir.
-     * SDK örneği: RetrievePaymentRequest (paymentId ve/veya paymentConversationId ile)
      *
-     * En az birini vermek zorunlu:
+     * En az bir parametre zorunludur:
      *  - $paymentId
      *  - $paymentConversationId
      */
-    public function paymentDetail(?string $paymentId = null, ?string $paymentConversationId = null): Payment
-    {
+    public function paymentDetail(
+        ?string $paymentId = null,
+        ?string $paymentConversationId = null
+    ): Payment {
         if ($paymentId === null && $paymentConversationId === null) {
-            throw new InvalidArgumentException('paymentId veya paymentConversationId parametrelerinden en az biri verilmelidir.');
+            throw new InvalidArgumentException(
+                'paymentId veya paymentConversationId parametrelerinden en az biri verilmelidir.'
+            );
         }
 
-        $r = new RetrievePaymentRequest();
-        $r->setLocale($this->cfg->locale);
-        $r->setConversationId($this->cfg->conversationId);
+        $paymentRequest = new RetrievePaymentRequest();
+        $paymentRequest->setLocale($this->config->locale);
+        $paymentRequest->setConversationId($this->config->conversationId);
 
         if ($paymentId !== null) {
-            $r->setPaymentId($paymentId);
-        }
-        if ($paymentConversationId !== null) {
-            $r->setPaymentConversationId($paymentConversationId);
+            $paymentRequest->setPaymentId($paymentId);
         }
 
-        return Payment::retrieve($r, OptionsFactory::create($this->cfg));
+        if ($paymentConversationId !== null) {
+            $paymentRequest->setPaymentConversationId($paymentConversationId);
+        }
+
+        return Payment::retrieve(
+            $paymentRequest,
+            OptionsFactory::create($this->config)
+        );
     }
 
     /**
-     * İmza doğrulama için gereken alanları örnek sırada döndürür:
-     * [$paymentId, $currency, $basketId, $conversationId, $paidPrice, $price]
+     * İmza doğrulama için gerekli alanları döndürür.
      */
     public function signatureFields(Payment $payment): array
     {
@@ -60,12 +66,14 @@ final class Status
     }
 
     /**
-     * Dışarıdan verilen hesaplayıcı ile (ör. calculateHmacSHA256Signature) imzayı doğrular.
-     * $calculator, signatureFields(array) alıp string döndürmelidir.
+     * Dışarıdan verilen imza hesaplayıcı (callable) ile imzayı doğrular.
      */
-    public function verifySignatureWith(callable $calculator, Payment $payment): bool
+    public function verifySignatureWith(callable $signatureCalculator, Payment $payment): bool
     {
-        $calc = $calculator($this->signatureFields($payment));
-        return $payment->getSignature() === $calc;
+        $calculatedSignature = $signatureCalculator(
+            $this->signatureFields($payment)
+        );
+
+        return $payment->getSignature() === $calculatedSignature;
     }
 }

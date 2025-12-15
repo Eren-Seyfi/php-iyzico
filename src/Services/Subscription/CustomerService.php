@@ -6,7 +6,7 @@ namespace Eren5\PhpIyzico\Services\Subscription;
 use Eren5\PhpIyzico\Config;
 use Eren5\PhpIyzico\OptionsFactory;
 
-use Iyzipay\Model\Customer as IyzCustomer;
+use Iyzipay\Model\Customer as IyzicoCustomer;
 use Iyzipay\Model\Subscription\RetrieveList;
 use Iyzipay\Model\Subscription\SubscriptionCustomer;
 
@@ -17,174 +17,176 @@ use Iyzipay\Request\Subscription\SubscriptionListCustomersRequest;
 use Iyzipay\Request\Subscription\SubscriptionDeleteCustomerRequest;
 
 /**
- * Abonelik Müşterisi CRUD
+ * Abonelik Müşterisi CRUD işlemleri
  */
 final class CustomerService
 {
-    public function __construct(private Config $cfg)
+    public function __construct(private Config $config)
     {
     }
 
     /**
-     * Müşteri oluştur (SDK checkout/customer örneklerindeki alanlarla uyumlu).
+     * Müşteri oluşturma
      *
-     * Zorunlu: name, surname, email
-     * Opsiyonel: gsmNumber, identityNumber,
-     *   shippingContactName, shippingCity, shippingCountry, shippingAddress, shippingZipCode,
-     *   billingContactName,  billingCity,  billingCountry,  billingAddress,  billingZipCode
-     *
-     * @param array{
-     *   name:string,
-     *   surname:string,
-     *   email:string,
-     *   gsmNumber?:string,
-     *   identityNumber?:string,
-     *   shippingContactName?:string, shippingCity?:string, shippingCountry?:string, shippingAddress?:string, shippingZipCode?:string,
-     *   billingContactName?:string,  billingCity?:string,  billingCountry?:string,  billingAddress?:string,  billingZipCode?:string
-     * } $data
+     * @param array<string, string> $customerData
      */
-    public function create(array $data)
+    public function create(array $customerData)
     {
-        $req = new SubscriptionCreateCustomerRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
+        $createCustomerRequest = new SubscriptionCreateCustomerRequest();
+        $createCustomerRequest->setLocale($this->config->locale);
+        $createCustomerRequest->setConversationId($this->config->conversationId);
 
-        // Customer modelini kur ve isteğe ekle (IDE undefined method uyarılarını önler)
-        $c = $this->buildCustomer($data);
-        $req->setCustomer($c);
+        $customerModel = $this->buildCustomerModel($customerData);
+        $createCustomerRequest->setCustomer($customerModel);
 
-        return SubscriptionCustomer::create($req, OptionsFactory::create($this->cfg));
-    }
-
-    /** Müşteri getir (referenceCode ile) */
-    public function retrieve(string $customerRef)
-    {
-        $req = new SubscriptionRetrieveCustomerRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
-        $req->setCustomerReferenceCode($customerRef);
-
-        return SubscriptionCustomer::retrieve($req, OptionsFactory::create($this->cfg));
-    }
-
-    /** Müşteri listele (sayfalı) */
-    public function list(int $page = 1, int $count = 20)
-    {
-        $req = new SubscriptionListCustomersRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
-
-        if (method_exists($req, 'setPage')) {
-            $req->setPage($page);
-        }
-        if (method_exists($req, 'setCount')) {
-            $req->setCount($count);
-        }
-
-        // IDE uyumlu ve SDK örnekleriyle tutarlı: RetrieveList::customers(...)
-        return RetrieveList::customers($req, OptionsFactory::create($this->cfg));
-    }
-
-    /**
-     * Müşteri güncelle.
-     * Desteklenen alanlar: name, surname, email, gsmNumber, identityNumber + shipping/billing alanları
-     * @param array<string,string> $data
-     */
-    public function update(string $customerRef, array $data)
-    {
-        $req = new SubscriptionUpdateCustomerRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
-        $req->setCustomerReferenceCode($customerRef);
-
-        // Customer modelini (yalnızca gönderilen alanlarla) kurup isteğe ekle
-        $c = $this->buildCustomer($data);
-        $req->setCustomer($c);
-
-        return SubscriptionCustomer::update($req, OptionsFactory::create($this->cfg));
-    }
-
-    /** Müşteri sil */
-    public function delete(string $customerRef)
-    {
-        $req = new SubscriptionDeleteCustomerRequest();
-        $req->setLocale($this->cfg->locale);
-        $req->setConversationId($this->cfg->conversationId);
-        $req->setCustomerReferenceCode($customerRef);
-
-        // Bazı IDE’lerde statik delete metodu için “undefined” uyarısı çıkabiliyor.
-        // call_user_func ile lint'i susturuyoruz; çalışma zamanı davranışı aynı.
-        return \call_user_func(
-            [SubscriptionCustomer::class, 'delete'],
-            $req,
-            OptionsFactory::create($this->cfg)
+        return SubscriptionCustomer::create(
+            $createCustomerRequest,
+            OptionsFactory::create($this->config)
         );
     }
 
     /**
-     * Iyzipay Customer modelini veriden inşa eder (yalnızca gelen alanları set eder)
+     * Müşteri getirme
+     */
+    public function retrieve(string $customerReferenceCode)
+    {
+        $retrieveCustomerRequest = new SubscriptionRetrieveCustomerRequest();
+        $retrieveCustomerRequest->setLocale($this->config->locale);
+        $retrieveCustomerRequest->setConversationId($this->config->conversationId);
+        $retrieveCustomerRequest->setCustomerReferenceCode($customerReferenceCode);
+
+        return SubscriptionCustomer::retrieve(
+            $retrieveCustomerRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Müşteri listeleme (sayfalama)
+     */
+    public function list(int $page = 1, int $count = 20)
+    {
+        $listCustomerRequest = new SubscriptionListCustomersRequest();
+        $listCustomerRequest->setLocale($this->config->locale);
+        $listCustomerRequest->setConversationId($this->config->conversationId);
+
+        if (method_exists($listCustomerRequest, 'setPage')) {
+            $listCustomerRequest->setPage($page);
+        }
+        if (method_exists($listCustomerRequest, 'setCount')) {
+            $listCustomerRequest->setCount($count);
+        }
+
+        return RetrieveList::customers(
+            $listCustomerRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Müşteri güncelleme
+     *
+     * @param array<string, string> $customerData
+     */
+    public function update(string $customerReferenceCode, array $customerData)
+    {
+        $updateCustomerRequest = new SubscriptionUpdateCustomerRequest();
+        $updateCustomerRequest->setLocale($this->config->locale);
+        $updateCustomerRequest->setConversationId($this->config->conversationId);
+        $updateCustomerRequest->setCustomerReferenceCode($customerReferenceCode);
+
+        $customerModel = $this->buildCustomerModel($customerData);
+        $updateCustomerRequest->setCustomer($customerModel);
+
+        return SubscriptionCustomer::update(
+            $updateCustomerRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Müşteri silme
+     */
+    public function delete(string $customerReferenceCode)
+    {
+        $deleteCustomerRequest = new SubscriptionDeleteCustomerRequest();
+        $deleteCustomerRequest->setLocale($this->config->locale);
+        $deleteCustomerRequest->setConversationId($this->config->conversationId);
+        $deleteCustomerRequest->setCustomerReferenceCode($customerReferenceCode);
+
+        return \call_user_func(
+            [SubscriptionCustomer::class, 'delete'],
+            $deleteCustomerRequest,
+            OptionsFactory::create($this->config)
+        );
+    }
+
+    /**
+     * Iyzipay Customer modelini dolduran yardımcı
+     *
      * @param array<string,string> $data
      */
-    private function buildCustomer(array $data): IyzCustomer
+    private function buildCustomerModel(array $data): IyzicoCustomer
     {
-        $c = new IyzCustomer();
+        $customer = new IyzicoCustomer();
 
-        // Temel
+        // Temel alanlar
         if (!empty($data['name'])) {
-            $c->setName((string) $data['name']);
+            $customer->setName((string) $data['name']);
         }
         if (!empty($data['surname'])) {
-            $c->setSurname((string) $data['surname']);
+            $customer->setSurname((string) $data['surname']);
         }
         if (!empty($data['email'])) {
-            $c->setEmail((string) $data['email']);
+            $customer->setEmail((string) $data['email']);
         }
         if (!empty($data['gsmNumber'])) {
-            $c->setGsmNumber((string) $data['gsmNumber']);
+            $customer->setGsmNumber((string) $data['gsmNumber']);
         }
         if (!empty($data['identityNumber'])) {
-            $c->setIdentityNumber((string) $data['identityNumber']);
+            $customer->setIdentityNumber((string) $data['identityNumber']);
         }
 
-        // Shipping
+        // Shipping bilgileri
         if (!empty($data['shippingContactName'])) {
-            $c->setShippingContactName((string) $data['shippingContactName']);
+            $customer->setShippingContactName((string) $data['shippingContactName']);
         }
         if (!empty($data['shippingCity'])) {
-            $c->setShippingCity((string) $data['shippingCity']);
+            $customer->setShippingCity((string) $data['shippingCity']);
+        }
+        if (!empty($data['shippingDistrict'])) {
+            $customer->setShippingDistrict((string) $data['shippingDistrict']);
         }
         if (!empty($data['shippingCountry'])) {
-            $c->setShippingCountry((string) $data['shippingCountry']);
+            $customer->setShippingCountry((string) $data['shippingCountry']);
         }
         if (!empty($data['shippingAddress'])) {
-            $c->setShippingAddress((string) $data['shippingAddress']);
+            $customer->setShippingAddress((string) $data['shippingAddress']);
         }
         if (!empty($data['shippingZipCode'])) {
-            $c->setShippingZipCode((string) $data['shippingZipCode']);
+            $customer->setShippingZipCode((string) $data['shippingZipCode']);
         }
 
-        if (!empty($data['shippingDistrict']))
-            $c->setShippingDistrict((string) $data['shippingDistrict']);
-
-        // Billing
+        // Billing bilgileri
         if (!empty($data['billingContactName'])) {
-            $c->setBillingContactName((string) $data['billingContactName']);
+            $customer->setBillingContactName((string) $data['billingContactName']);
         }
         if (!empty($data['billingCity'])) {
-            $c->setBillingCity((string) $data['billingCity']);
+            $customer->setBillingCity((string) $data['billingCity']);
+        }
+        if (!empty($data['billingDistrict'])) {
+            $customer->setBillingDistrict((string) $data['billingDistrict']);
         }
         if (!empty($data['billingCountry'])) {
-            $c->setBillingCountry((string) $data['billingCountry']);
+            $customer->setBillingCountry((string) $data['billingCountry']);
         }
         if (!empty($data['billingAddress'])) {
-            $c->setBillingAddress((string) $data['billingAddress']);
+            $customer->setBillingAddress((string) $data['billingAddress']);
         }
         if (!empty($data['billingZipCode'])) {
-            $c->setBillingZipCode((string) $data['billingZipCode']);
+            $customer->setBillingZipCode((string) $data['billingZipCode']);
         }
-        if (!empty($data['billingDistrict']))
-            $c->setBillingDistrict((string) $data['billingDistrict']);
 
-        return $c;
+        return $customer;
     }
 }

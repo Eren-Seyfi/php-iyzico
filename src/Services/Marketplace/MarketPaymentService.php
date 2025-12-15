@@ -119,11 +119,11 @@ final class MarketPaymentService
         $this->assertBasketItems($payment['basketItems']);
 
         // CreatePaymentRequest kur ve gönder
-        $req = $this->buildCreatePaymentRequest($payment);
-        $resp = Payment::create($req, $this->options);
+        $request = $this->buildCreatePaymentRequest($payment);
+        $response = Payment::create($request, $this->options);
 
         // Basit normalize edilmiş dizi döndür
-        return $this->responseToArray($resp);
+        return $this->responseToArray($response);
     }
 
     /* =============================================================================
@@ -178,22 +178,22 @@ final class MarketPaymentService
         $this->assertBasketItems($payment['basketItems']);
 
         // 3DS init için de CreatePaymentRequest kullanılır.
-        $req = $this->buildCreatePaymentRequest($payment);
+        $request = $this->buildCreatePaymentRequest($payment);
 
         // 3DS callback adresi: bankadan dönüş bu adrese gönderilir
-        $req->setCallbackUrl((string) $payment['callbackUrl']);
+        $request->setCallbackUrl((string) $payment['callbackUrl']);
 
         /** @var ThreedsInitialize $resp */
-        $resp = ThreedsInitialize::create($req, $this->options);
+        $response = ThreedsInitialize::create($request, $this->options);
 
-        $arr = $this->responseToArray($resp);
+        $responseArray = $this->responseToArray($response);
 
         // HTML içerik genelde 'threeDSHtmlContent' ya da 'htmlContent' alanı ile gelir
-        $raw = $arr['raw'];
-        if (is_array($raw)) {
-            $arr['threeDSHtmlContent'] = $raw['threeDSHtmlContent'] ?? $raw['htmlContent'] ?? null;
+        $rawResult = $responseArray['raw'];
+        if (is_array($rawResult)) {
+            $responseArray['threeDSHtmlContent'] = $rawResult['threeDSHtmlContent'] ?? $rawResult['htmlContent'] ?? null;
         }
-        return $arr;
+        return $responseArray;
     }
 
     /**
@@ -221,15 +221,15 @@ final class MarketPaymentService
         // 3DS tamamlamak için 'paymentId' ve 'conversationData' şart
         $this->require($data, ['paymentId', 'conversationData']);
 
-        $req = new CreateThreedsPaymentRequest();
-        $req->setLocale($data['locale'] ?? Locale::TR);
-        $req->setConversationId($data['conversationId'] ?? (string) microtime(true));
-        $req->setPaymentId((string) $data['paymentId']);
-        $req->setConversationData((string) $data['conversationData']);
+        $request = new CreateThreedsPaymentRequest();
+        $request->setLocale($data['locale'] ?? Locale::TR);
+        $request->setConversationId($data['conversationId'] ?? (string) microtime(true));
+        $request->setPaymentId((string) $data['paymentId']);
+        $request->setConversationData((string) $data['conversationData']);
 
         /** @var ThreedsPayment $resp */
-        $resp = ThreedsPayment::create($req, $this->options);
-        return $this->responseToArray($resp);
+        $response = ThreedsPayment::create($request, $this->options);
+        return $this->responseToArray($response);
     }
 
     /* =============================================================================
@@ -282,41 +282,41 @@ final class MarketPaymentService
         ]);
         $this->assertBasketItems($payment['basketItems']);
 
-        $req = new CreateCheckoutFormInitializeRequest();
-        $req->setLocale($payment['locale'] ?? Locale::TR);
-        $req->setConversationId($payment['conversationId'] ?? (string) microtime(true));
-        $req->setPrice((string) $payment['price']);
-        $req->setPaidPrice((string) $payment['paidPrice']);
-        $req->setCurrency($this->normalizeCurrency($payment['currency']));
-        $req->setCallbackUrl((string) $payment['callbackUrl']);
+        $request = new CreateCheckoutFormInitializeRequest();
+        $request->setLocale($payment['locale'] ?? Locale::TR);
+        $request->setConversationId($payment['conversationId'] ?? (string) microtime(true));
+        $request->setPrice((string) $payment['price']);
+        $request->setPaidPrice((string) $payment['paidPrice']);
+        $request->setCurrency($this->normalizeCurrency($payment['currency']));
+        $request->setCallbackUrl((string) $payment['callbackUrl']);
         if (!empty($payment['basketId'])) {
-            $req->setBasketId((string) $payment['basketId']);
+            $request->setBasketId((string) $payment['basketId']);
         }
         // setPaymentChannel yok — çağrılmıyor
-        $req->setPaymentGroup($this->normalizePaymentGroup($payment['paymentGroup'] ?? PaymentGroup::PRODUCT));
+        $request->setPaymentGroup($this->normalizePaymentGroup($payment['paymentGroup'] ?? PaymentGroup::PRODUCT));
 
         // Taksit kısıtlaması (banka bazlı)
         if (!empty($payment['enabledInstallments']) && is_array($payment['enabledInstallments'])) {
-            $req->setEnabledInstallments($payment['enabledInstallments']);
+            $request->setEnabledInstallments($payment['enabledInstallments']);
         }
 
         // Zorunlu parçalar
-        $req->setBuyer($this->buildBuyer($payment['buyer']));
-        $req->setShippingAddress($this->buildAddress($payment['shippingAddress']));
-        $req->setBillingAddress($this->buildAddress($payment['billingAddress']));
-        $req->setBasketItems($this->buildBasketItems($payment['basketItems']));
+        $request->setBuyer($this->buildBuyer($payment['buyer']));
+        $request->setShippingAddress($this->buildAddress($payment['shippingAddress']));
+        $request->setBillingAddress($this->buildAddress($payment['billingAddress']));
+        $request->setBasketItems($this->buildBasketItems($payment['basketItems']));
 
-        $resp = CheckoutFormInitialize::create($req, $this->options);
+        $response = CheckoutFormInitialize::create($request, $this->options);
 
         // Yanıtı normalize et
-        $arr = $this->responseToArray($resp);
-        $raw = $arr['raw'];
-        if (is_array($raw)) {
-            $arr['checkoutFormContent'] = $raw['checkoutFormContent'] ?? null;
-            $arr['token'] = $raw['token'] ?? null;
-            $arr['tokenExpireTime'] = $raw['tokenExpireTime'] ?? null;
+        $responseArray = $this->responseToArray($response);
+        $rawResult = $responseArray['raw'];
+        if (is_array($rawResult)) {
+            $responseArray['checkoutFormContent'] = $rawResult['checkoutFormContent'] ?? null;
+            $responseArray['token'] = $rawResult['token'] ?? null;
+            $responseArray['tokenExpireTime'] = $rawResult['tokenExpireTime'] ?? null;
         }
-        return $arr;
+        return $responseArray;
     }
 
     /**
@@ -333,13 +333,13 @@ final class MarketPaymentService
     {
         $this->require($data, ['token']);
 
-        $req = new RetrieveCheckoutFormRequest();
-        $req->setLocale($data['locale'] ?? Locale::TR);
-        $req->setConversationId($data['conversationId'] ?? (string) microtime(true));
-        $req->setToken((string) $data['token']);
+        $request = new RetrieveCheckoutFormRequest();
+        $request->setLocale($data['locale'] ?? Locale::TR);
+        $request->setConversationId($data['conversationId'] ?? (string) microtime(true));
+        $request->setToken((string) $data['token']);
 
-        $resp = CheckoutForm::retrieve($req, $this->options);
-        return $this->responseToArray($resp);
+        $response = CheckoutForm::retrieve($request, $this->options);
+        return $this->responseToArray($response);
     }
 
     /* =============================================================================
@@ -392,38 +392,38 @@ final class MarketPaymentService
         ]);
         $this->assertBasketItems($payment['basketItems']);
 
-        $req = new CreatePayWithIyzicoInitializeRequest();
-        $req->setLocale($payment['locale'] ?? Locale::TR);
-        $req->setConversationId($payment['conversationId'] ?? (string) microtime(true));
-        $req->setPrice((string) $payment['price']);
-        $req->setPaidPrice((string) $payment['paidPrice']);
-        $req->setCurrency($this->normalizeCurrency($payment['currency']));
-        $req->setCallbackUrl((string) $payment['callbackUrl']);
+        $request = new CreatePayWithIyzicoInitializeRequest();
+        $request->setLocale($payment['locale'] ?? Locale::TR);
+        $request->setConversationId($payment['conversationId'] ?? (string) microtime(true));
+        $request->setPrice((string) $payment['price']);
+        $request->setPaidPrice((string) $payment['paidPrice']);
+        $request->setCurrency($this->normalizeCurrency($payment['currency']));
+        $request->setCallbackUrl((string) $payment['callbackUrl']);
         if (!empty($payment['basketId'])) {
-            $req->setBasketId((string) $payment['basketId']);
+            $request->setBasketId((string) $payment['basketId']);
         }
 
         // setPaymentChannel yok — çağrılmıyor
-        $req->setPaymentGroup($this->normalizePaymentGroup($payment['paymentGroup'] ?? PaymentGroup::PRODUCT));
+        $request->setPaymentGroup($this->normalizePaymentGroup($payment['paymentGroup'] ?? PaymentGroup::PRODUCT));
 
         if (!empty($payment['enabledInstallments']) && is_array($payment['enabledInstallments'])) {
-            $req->setEnabledInstallments($payment['enabledInstallments']);
+            $request->setEnabledInstallments($payment['enabledInstallments']);
         }
-        $req->setBuyer($this->buildBuyer($payment['buyer']));
-        $req->setShippingAddress($this->buildAddress($payment['shippingAddress']));
-        $req->setBillingAddress($this->buildAddress($payment['billingAddress']));
-        $req->setBasketItems($this->buildBasketItems($payment['basketItems']));
+        $request->setBuyer($this->buildBuyer($payment['buyer']));
+        $request->setShippingAddress($this->buildAddress($payment['shippingAddress']));
+        $request->setBillingAddress($this->buildAddress($payment['billingAddress']));
+        $request->setBasketItems($this->buildBasketItems($payment['basketItems']));
 
-        $resp = PayWithIyzicoInitialize::create($req, $this->options);
+        $response = PayWithIyzicoInitialize::create($request, $this->options);
 
-        $arr = $this->responseToArray($resp);
-        $raw = $arr['raw'];
-        if (is_array($raw)) {
-            $arr['payWithIyzicoPageUrl'] = $raw['payWithIyzicoPageUrl'] ?? null;
-            $arr['token'] = $raw['token'] ?? null;
-            $arr['tokenExpireTime'] = $raw['tokenExpireTime'] ?? null;
+        $responseArray = $this->responseToArray($response);
+        $rawResult = $responseArray['raw'];
+        if (is_array($rawResult)) {
+            $responseArray['payWithIyzicoPageUrl'] = $rawResult['payWithIyzicoPageUrl'] ?? null;
+            $responseArray['token'] = $rawResult['token'] ?? null;
+            $responseArray['tokenExpireTime'] = $rawResult['tokenExpireTime'] ?? null;
         }
-        return $arr;
+        return $responseArray;
     }
 
     /**
@@ -440,13 +440,13 @@ final class MarketPaymentService
     {
         $this->require($data, ['token']);
 
-        $req = new RetrievePayWithIyzicoRequest();
-        $req->setLocale($data['locale'] ?? Locale::TR);
-        $req->setConversationId($data['conversationId'] ?? (string) microtime(true));
-        $req->setToken((string) $data['token']);
+        $request = new RetrievePayWithIyzicoRequest();
+        $request->setLocale($data['locale'] ?? Locale::TR);
+        $request->setConversationId($data['conversationId'] ?? (string) microtime(true));
+        $request->setToken((string) $data['token']);
 
-        $resp = PayWithIyzico::retrieve($req, $this->options);
-        return $this->responseToArray($resp);
+        $response = PayWithIyzico::retrieve($request, $this->options);
+        return $this->responseToArray($response);
     }
 
     /* =============================================================================
@@ -459,41 +459,41 @@ final class MarketPaymentService
      * @param array<string,mixed> $p Üstteki createNon3DS/init3DS parametreleriyle aynı mantık
      * @return CreatePaymentRequest
      */
-    private function buildCreatePaymentRequest(array $p): CreatePaymentRequest
+    private function buildCreatePaymentRequest(array $paymentData): CreatePaymentRequest
     {
-        $req = new CreatePaymentRequest();
+        $request = new CreatePaymentRequest();
 
         // Locale/conversationId yoksa varsayılanları kullan (mikro saniyeli fallback)
-        $req->setLocale($p['locale'] ?? Locale::TR);
-        $req->setConversationId($p['conversationId'] ?? (string) microtime(true));
+        $request->setLocale($paymentData['locale'] ?? Locale::TR);
+        $request->setConversationId($paymentData['conversationId'] ?? (string) microtime(true));
 
         // Zorunlu parasal alanlar (string olarak set edilir)
-        $req->setPrice((string) $p['price']);
-        $req->setPaidPrice((string) $p['paidPrice']);
+        $request->setPrice((string) $paymentData['price']);
+        $request->setPaidPrice((string) $paymentData['paidPrice']);
 
         // Para birimi normalize edilir (TL/TRY farkı gözetilir)
-        $req->setCurrency($this->normalizeCurrency($p['currency']));
+        $request->setCurrency($this->normalizeCurrency($paymentData['currency']));
 
         // Taksit sayısı (yoksa 1)
-        $req->setInstallment((int) ($p['installment'] ?? 1));
+        $request->setInstallment((int) ($paymentData['installment'] ?? 1));
 
         // Sepet ID (opsiyonel)
-        if (!empty($p['basketId'])) {
-            $req->setBasketId((string) $p['basketId']);
+        if (!empty($paymentData['basketId'])) {
+            $request->setBasketId((string) $paymentData['basketId']);
         }
 
         // Ödeme kanalı/grubu normalize edilir
-        $req->setPaymentChannel($this->normalizePaymentChannel($p['paymentChannel'] ?? PaymentChannel::WEB));
-        $req->setPaymentGroup($this->normalizePaymentGroup($p['paymentGroup'] ?? PaymentGroup::PRODUCT));
+        $request->setPaymentChannel($this->normalizePaymentChannel($paymentData['paymentChannel'] ?? PaymentChannel::WEB));
+        $request->setPaymentGroup($this->normalizePaymentGroup($paymentData['paymentGroup'] ?? PaymentGroup::PRODUCT));
 
         // Kart/alıcı/adres/sepet builder’ları
-        $req->setPaymentCard($this->buildPaymentCard($p['paymentCard']));
-        $req->setBuyer($this->buildBuyer($p['buyer']));
-        $req->setShippingAddress($this->buildAddress($p['shippingAddress']));
-        $req->setBillingAddress($this->buildAddress($p['billingAddress']));
-        $req->setBasketItems($this->buildBasketItems($p['basketItems']));
+        $request->setPaymentCard($this->buildPaymentCard($paymentData['paymentCard']));
+        $request->setBuyer($this->buildBuyer($paymentData['buyer']));
+        $request->setShippingAddress($this->buildAddress($paymentData['shippingAddress']));
+        $request->setBillingAddress($this->buildAddress($paymentData['billingAddress']));
+        $request->setBasketItems($this->buildBasketItems($paymentData['basketItems']));
 
-        return $req;
+        return $request;
     }
 
     /**
@@ -511,29 +511,29 @@ final class MarketPaymentService
         // Minimum kart alanları
         $this->require($card, ['cardHolderName', 'cardNumber', 'expireMonth', 'expireYear', 'cvc']);
 
-        $pc = new PaymentCard();
-        $pc->setCardHolderName((string) $card['cardHolderName']);
-        $pc->setCardNumber((string) $card['cardNumber']);
-        $pc->setExpireMonth((string) $card['expireMonth']);
-        $pc->setExpireYear((string) $card['expireYear']);
-        $pc->setCvc((string) $card['cvc']);
-        $pc->setRegisterCard((int) ($card['registerCard'] ?? 0));
+        $paymentCard = new PaymentCard();
+        $paymentCard->setCardHolderName((string) $card['cardHolderName']);
+        $paymentCard->setCardNumber((string) $card['cardNumber']);
+        $paymentCard->setExpireMonth((string) $card['expireMonth']);
+        $paymentCard->setExpireYear((string) $card['expireYear']);
+        $paymentCard->setCvc((string) $card['cvc']);
+        $paymentCard->setRegisterCard((int) ($card['registerCard'] ?? 0));
 
         // Opsiyoneller (SDK modelinde mevcut)
         if (isset($card['cardAlias']))
-            $pc->setCardAlias((string) $card['cardAlias']);
+            $paymentCard->setCardAlias((string) $card['cardAlias']);
         if (isset($card['cardToken']))
-            $pc->setCardToken((string) $card['cardToken']);
+            $paymentCard->setCardToken((string) $card['cardToken']);
         if (isset($card['cardUserKey']))
-            $pc->setCardUserKey((string) $card['cardUserKey']);
+            $paymentCard->setCardUserKey((string) $card['cardUserKey']);
         if (isset($card['registerConsumerCard']))
-            $pc->setRegisterConsumerCard((int) $card['registerConsumerCard']);
+            $paymentCard->setRegisterConsumerCard((int) $card['registerConsumerCard']);
         if (isset($card['ucsToken']))
-            $pc->setUcsToken((string) $card['ucsToken']);
+            $paymentCard->setUcsToken((string) $card['ucsToken']);
         if (isset($card['consumerToken']))
-            $pc->setConsumerToken((string) $card['consumerToken']);
+            $paymentCard->setConsumerToken((string) $card['consumerToken']);
 
-        return $pc;
+        return $paymentCard;
     }
 
     /**
@@ -548,9 +548,9 @@ final class MarketPaymentService
      *
      * @param array<string,mixed> $b
      */
-    private function buildBuyer(array $b): Buyer
+    private function buildBuyer(array $buyerData): Buyer
     {
-        $this->require($b, [
+        $this->require($buyerData, [
             'id',
             'name',
             'surname',
@@ -565,21 +565,21 @@ final class MarketPaymentService
         ]);
 
         $buyer = new Buyer();
-        $buyer->setId((string) $b['id']);
-        $buyer->setName((string) $b['name']);
-        $buyer->setSurname((string) $b['surname']);
-        $buyer->setGsmNumber((string) $b['gsmNumber']);
-        $buyer->setEmail((string) $b['email']);
-        $buyer->setIdentityNumber((string) $b['identityNumber']);
-        if (!empty($b['lastLoginDate']))
-            $buyer->setLastLoginDate((string) $b['lastLoginDate']);
-        if (!empty($b['registrationDate']))
-            $buyer->setRegistrationDate((string) $b['registrationDate']);
-        $buyer->setRegistrationAddress((string) $b['registrationAddress']);
-        $buyer->setIp((string) $b['ip']);
-        $buyer->setCity((string) $b['city']);
-        $buyer->setCountry((string) $b['country']);
-        $buyer->setZipCode((string) $b['zipCode']);
+        $buyer->setId((string) $buyerData['id']);
+        $buyer->setName((string) $buyerData['name']);
+        $buyer->setSurname((string) $buyerData['surname']);
+        $buyer->setGsmNumber((string) $buyerData['gsmNumber']);
+        $buyer->setEmail((string) $buyerData['email']);
+        $buyer->setIdentityNumber((string) $buyerData['identityNumber']);
+        if (!empty($buyerData['lastLoginDate']))
+            $buyer->setLastLoginDate((string) $buyerData['lastLoginDate']);
+        if (!empty($buyerData['registrationDate']))
+            $buyer->setRegistrationDate((string) $buyerData['registrationDate']);
+        $buyer->setRegistrationAddress((string) $buyerData['registrationAddress']);
+        $buyer->setIp((string) $buyerData['ip']);
+        $buyer->setCity((string) $buyerData['city']);
+        $buyer->setCountry((string) $buyerData['country']);
+        $buyer->setZipCode((string) $buyerData['zipCode']);
 
         return $buyer;
     }
@@ -591,18 +591,18 @@ final class MarketPaymentService
      *
      * @param array<string,mixed> $a
      */
-    private function buildAddress(array $a): Address
+    private function buildAddress(array $addressData): Address
     {
-        $this->require($a, ['contactName', 'city', 'country', 'address', 'zipCode']);
+        $this->require($addressData, ['contactName', 'city', 'country', 'address', 'zipCode']);
 
-        $ad = new Address();
-        $ad->setContactName((string) $a['contactName']);
-        $ad->setCity((string) $a['city']);
-        $ad->setCountry((string) $a['country']);
-        $ad->setAddress((string) $a['address']);
-        $ad->setZipCode((string) $a['zipCode']);
+        $address = new Address();
+        $address->setContactName((string) $addressData['contactName']);
+        $address->setCity((string) $addressData['city']);
+        $address->setCountry((string) $addressData['country']);
+        $address->setAddress((string) $addressData['address']);
+        $address->setZipCode((string) $addressData['zipCode']);
 
-        return $ad;
+        return $address;
     }
 
     /**
@@ -619,42 +619,42 @@ final class MarketPaymentService
      */
     private function buildBasketItems(array $items): array
     {
-        $out = [];
+        $basketItems = [];
 
-        foreach ($items as $it) {
+        foreach ($items as $item) {
             // Pazaryeri bölüşüm için subMerchantKey/subMerchantPrice zorunlu
-            $this->require($it, ['id', 'name', 'price', 'subMerchantKey', 'subMerchantPrice']);
+            $this->require($item, ['id', 'name', 'price', 'subMerchantKey', 'subMerchantPrice']);
 
-            $bi = new BasketItem();
-            $bi->setId((string) $it['id']);
-            $bi->setName((string) $it['name']);
+            $basketItem = new BasketItem();
+            $basketItem->setId((string) $item['id']);
+            $basketItem->setName((string) $item['name']);
 
             // Kategori alanları opsiyonel
-            $bi->setCategory1((string) ($it['category1'] ?? ''));
-            if (!empty($it['category2'])) {
-                $bi->setCategory2((string) $it['category2']);
+            $basketItem->setCategory1((string) ($item['category1'] ?? ''));
+            if (!empty($item['category2'])) {
+                $basketItem->setCategory2((string) $item['category2']);
             }
 
             // Ürün tipi: PHYSICAL/VIRTUAL (varsayılan PHYSICAL)
-            $bi->setItemType($this->normalizeItemType($it['itemType'] ?? BasketItemType::PHYSICAL));
+            $basketItem->setItemType($this->normalizeItemType($item['itemType'] ?? BasketItemType::PHYSICAL));
 
             // Fiyat alanları string olarak gönderilmeli
-            $bi->setPrice((string) $it['price']);
+            $basketItem->setPrice((string) $item['price']);
 
             // Pazaryeri zorunlu alanları
-            $bi->setSubMerchantKey((string) $it['subMerchantKey']);
-            $bi->setSubMerchantPrice((string) $it['subMerchantPrice']);
+            $basketItem->setSubMerchantKey((string) $item['subMerchantKey']);
+            $basketItem->setSubMerchantPrice((string) $item['subMerchantPrice']);
 
             // Tevkifat (opsiyonel) — SDK modelinde alan mevcut
-            if (isset($it['withholdingTax'])) {
+            if (isset($item['withholdingTax'])) {
                 // Tipini SDK'ya uygun gönder (genelde sayı/oran)
-                $bi->setWithholdingTax($it['withholdingTax']);
+                $basketItem->setWithholdingTax($item['withholdingTax']);
             }
 
-            $out[] = $bi;
+            $basketItems[] = $basketItem;
         }
 
-        return $out;
+        return $basketItems;
     }
 
     /**
@@ -667,8 +667,8 @@ final class MarketPaymentService
         if (!is_array($items) || count($items) < 1) {
             throw new InvalidArgumentException('basketItems en az 1 öğe içermelidir.');
         }
-        foreach ($items as $it) {
-            $this->require($it, ['id', 'name', 'price', 'subMerchantKey', 'subMerchantPrice']);
+        foreach ($items as $item) {
+            $this->require($item, ['id', 'name', 'price', 'subMerchantKey', 'subMerchantPrice']);
         }
     }
 
@@ -678,14 +678,14 @@ final class MarketPaymentService
      * - "TL" veya "TRY" -> Currency::TL (değeri "TRY")
      * - Bilinmeyenler -> Currency::TL
      */
-    private function normalizeCurrency(string $cur): string
+    private function normalizeCurrency(string $currency): string
     {
-        $cur = strtoupper($cur);
-        if ($cur === 'TRY' || $cur === 'TL') {
+        $currency = strtoupper($currency);
+        if ($currency === 'TRY' || $currency === 'TL') {
             return Currency::TL; // SDK’da "TRY"
         }
 
-        return match ($cur) {
+        return match ($currency) {
             'USD' => Currency::USD,
             'EUR' => Currency::EUR,
             'GBP' => Currency::GBP,
@@ -717,9 +717,9 @@ final class MarketPaymentService
      * Not: CheckoutForm ve PWI init isteklerinde `setPaymentChannel` bulunmayabilir.
      * Bu yüzden sadece CreatePaymentRequest tarafında kullanılır.
      */
-    private function normalizePaymentChannel(string $ch): string
+    private function normalizePaymentChannel(string $channel): string
     {
-        return match (strtoupper($ch)) {
+        return match (strtoupper($channel)) {
             'WEB' => PaymentChannel::WEB,
             'MOBILE' => PaymentChannel::MOBILE,
             'MOBILE_WEB' => PaymentChannel::MOBILE_WEB,
@@ -735,10 +735,10 @@ final class MarketPaymentService
     /**
      * Basket item type normalize (PHYSICAL/VIRTUAL).
      */
-    
-    private function normalizeItemType(string $t): string
+
+    private function normalizeItemType(string $type): string
     {
-        return match (strtoupper($t)) {
+        return match (strtoupper($type)) {
             'PHYSICAL' => BasketItemType::PHYSICAL,
             'VIRTUAL' => BasketItemType::VIRTUAL,
             default => BasketItemType::PHYSICAL,
@@ -753,9 +753,9 @@ final class MarketPaymentService
      */
     private function require(array $data, array $fields): void
     {
-        foreach ($fields as $f) {
-            if (!array_key_exists($f, $data) || $data[$f] === null || $data[$f] === '') {
-                throw new InvalidArgumentException("Missing required field: {$f}");
+        foreach ($fields as $field) {
+            if (!array_key_exists($field, $data) || $data[$field] === null || $data[$field] === '') {
+                throw new InvalidArgumentException("Missing required field: {$field}");
             }
         }
     }
@@ -772,28 +772,28 @@ final class MarketPaymentService
     private function responseToArray(object $response): array
     {
         // Birçok Iyzipay modelinde getRawResult() JSON string döner
-        $raw = method_exists($response, 'getRawResult') ? $response->getRawResult() : null;
-        $arr = $raw ? json_decode($raw, true) : [];
+        $rawResult = method_exists($response, 'getRawResult') ? $response->getRawResult() : null;
+        $parsedRaw = $rawResult ? json_decode($rawResult, true) : [];
 
         // Yaygın alanlara hızlı erişim
-        $status = method_exists($response, 'getStatus') ? $response->getStatus() : ($arr['status'] ?? null);
-        $errCode = method_exists($response, 'getErrorCode') ? $response->getErrorCode() : ($arr['errorCode'] ?? null);
-        $errMsg = method_exists($response, 'getErrorMessage') ? $response->getErrorMessage() : ($arr['errorMessage'] ?? null);
+        $status = method_exists($response, 'getStatus') ? $response->getStatus() : ($parsedRaw['status'] ?? null);
+        $errorCode = method_exists($response, 'getErrorCode') ? $response->getErrorCode() : ($parsedRaw['errorCode'] ?? null);
+        $errorMessage = method_exists($response, 'getErrorMessage') ? $response->getErrorMessage() : ($parsedRaw['errorMessage'] ?? null);
 
         // Ödemeye özgü bazı alanları da kolayca dönelim (varsa)
-        $paymentId = $arr['paymentId'] ?? null;
-        $authCode = $arr['authCode'] ?? null;
-        $fraudStatus = $arr['fraudStatus'] ?? null;
+        $paymentId = $parsedRaw['paymentId'] ?? null;
+        $authCode = $parsedRaw['authCode'] ?? null;
+        $fraudStatus = $parsedRaw['fraudStatus'] ?? null;
 
         return [
             'ok' => ($status === 'success'),
             'status' => $status,
-            'errorCode' => $errCode,
-            'errorMessage' => $errMsg,
+            'errorCode' => $errorCode,
+            'errorMessage' => $errorMessage,
             'paymentId' => $paymentId,
             'authCode' => $authCode,
             'fraudStatus' => $fraudStatus,
-            'raw' => $arr ?: $raw, // JSON parse edilemediyse string halinde bırak
+            'raw' => $parsedRaw ?: $rawResult, // JSON parse edilemediyse string halinde bırak
         ];
     }
 }
