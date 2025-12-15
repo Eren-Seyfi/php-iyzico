@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico\Services\Checkout;
+namespace Eren\PhpIyzico\Services\Checkout;
 
-use Eren5\PhpIyzico\Config;
-use Eren5\PhpIyzico\OptionsFactory;
-use Eren5\PhpIyzico\Support\Helpers;
-use Eren5\PhpIyzico\Security\Signature as Sig;
+use Eren\PhpIyzico\Config;
+use Eren\PhpIyzico\OptionsFactory;
+use Eren\PhpIyzico\Support\Helpers;
+use Eren\PhpIyzico\Security\Signature as Sig;
 
 use Iyzipay\Model\CheckoutForm;
 use Iyzipay\Model\CheckoutFormInitialize;
@@ -44,7 +44,7 @@ final class CheckoutFormService
         array $basketItems,
         string $callbackUrl
     ): CheckoutFormInitialize {
-        
+
         if (!isset($order['price'])) {
             throw new InvalidArgumentException('order.price zorunludur.');
         }

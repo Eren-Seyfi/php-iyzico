@@ -2,6 +2,7 @@
   "name": "eren-seyfi/php-iyzico",
   "description": "Unofficial, opinionated PHP helper library built on top of iyzico/iyzipay-php.",
   "type": "library",
+  "version": "1.0.0",
   "license": "MIT",
   "keywords": [
     "iyzico",
@@ -12,6 +13,10 @@
     "turkey"
   ],
   "homepage": "https://github.com/Eren-Seyfi/php-iyzico",
+  "support": {
+    "issues": "https://github.com/Eren-Seyfi/php-iyzico/issues",
+    "source": "https://github.com/Eren-Seyfi/php-iyzico"
+  },
   "authors": [
     {
       "name": "Eren Seyfi",
@@ -24,7 +29,7 @@
   },
   "autoload": {
     "psr-4": {
-      "Eren5\\PhpIyzico\\": "src/"
+      "Eren\\PhpIyzico\\": "src/"
     }
   },
   "minimum-stability": "stable",

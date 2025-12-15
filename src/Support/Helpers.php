@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico\Support;
+namespace Eren\PhpIyzico\Support;
 
 use Iyzipay\Model\Buyer;
 use Iyzipay\Model\Address;

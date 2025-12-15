@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico\Security;
+namespace Eren\PhpIyzico\Security;
 
 use Iyzipay\Model\Payment;
 use Iyzipay\Model\ThreedsInitialize;

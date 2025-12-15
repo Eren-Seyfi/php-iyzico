@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico\Services\Payments;
+namespace Eren\PhpIyzico\Services\Payments;
 
-use Eren5\PhpIyzico\Config;
-use Eren5\PhpIyzico\OptionsFactory;
-use Eren5\PhpIyzico\Support\Helpers;
-use Eren5\PhpIyzico\Security\Signature;
+use Eren\PhpIyzico\Config;
+use Eren\PhpIyzico\OptionsFactory;
+use Eren\PhpIyzico\Support\Helpers;
+use Eren\PhpIyzico\Security\Signature;
 
 use Iyzipay\Model\Currency;
 use Iyzipay\Model\PaymentCard;

@@ -1,21 +1,21 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico;
+namespace Eren\PhpIyzico;
 
-use Eren5\PhpIyzico\Services\BinService;
-use Eren5\PhpIyzico\Services\CardStorage;
-use Eren5\PhpIyzico\Services\Checkout\CheckoutFormService;
-use Eren5\PhpIyzico\Services\Payments\Non3DS;
-use Eren5\PhpIyzico\Services\Payments\ThreeDS;
-use Eren5\PhpIyzico\Services\RefundCancel;
-use Eren5\PhpIyzico\Services\Status;
-use Eren5\PhpIyzico\Services\Subscription\ProductService;
-use Eren5\PhpIyzico\Services\Subscription\PricingPlanService;
-use Eren5\PhpIyzico\Services\Subscription\CustomerService;
-use Eren5\PhpIyzico\Services\Subscription\SubscriptionService;
-use Eren5\PhpIyzico\Services\Subscription\CardUpdateService;
-use Eren5\PhpIyzico\Services\Subscription\Webhook;
+use Eren\PhpIyzico\Services\BinService;
+use Eren\PhpIyzico\Services\CardStorage;
+use Eren\PhpIyzico\Services\Checkout\CheckoutFormService;
+use Eren\PhpIyzico\Services\Payments\Non3DS;
+use Eren\PhpIyzico\Services\Payments\ThreeDS;
+use Eren\PhpIyzico\Services\RefundCancel;
+use Eren\PhpIyzico\Services\Status;
+use Eren\PhpIyzico\Services\Subscription\ProductService;
+use Eren\PhpIyzico\Services\Subscription\PricingPlanService;
+use Eren\PhpIyzico\Services\Subscription\CustomerService;
+use Eren\PhpIyzico\Services\Subscription\SubscriptionService;
+use Eren\PhpIyzico\Services\Subscription\CardUpdateService;
+use Eren\PhpIyzico\Services\Subscription\Webhook;
 use PhpIyzico\Services\Links\LinkService;
 use PhpIyzico\Services\PWI\PWIService;
 use PhpIyzico\Services\Marketplace\SubMerchantService;

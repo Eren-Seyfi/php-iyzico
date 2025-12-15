@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico;
+namespace Eren\PhpIyzico;
 
 use Iyzipay\Options;
 

@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
 
-namespace Eren5\PhpIyzico\Services\Marketplace;
+namespace Eren\PhpIyzico\Services\Marketplace;
 
 use InvalidArgumentException;
-use Eren5\PhpIyzico\Config;
-use Eren5\PhpIyzico\OptionsFactory;
+use Eren\PhpIyzico\Config;
+use Eren\PhpIyzico\OptionsFactory;
 
 use Iyzipay\Options;
 use Iyzipay\Model\Currency;
